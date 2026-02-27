@@ -9,39 +9,28 @@ X_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
 X_ACCESS_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-client_ai = genai.Client(api_key=GEMINI_API_KEY)
+print(f"X_API_KEY presente: {bool(X_API_KEY)}")
+print(f"X_API_SECRET presente: {bool(X_API_SECRET)}")
+print(f"X_ACCESS_TOKEN presente: {bool(X_ACCESS_TOKEN)}")
+print(f"X_ACCESS_SECRET presente: {bool(X_ACCESS_SECRET)}")
+print(f"GEMINI_API_KEY presente: {bool(GEMINI_API_KEY)}")
 
-client = tweepy.Client(
-    consumer_key=X_API_KEY, consumer_secret=X_API_SECRET,
-    access_token=X_ACCESS_TOKEN, access_token_secret=X_ACCESS_SECRET
-)
+try:
+    client_ai = genai.Client(api_key=GEMINI_API_KEY)
+    response = client_ai.models.generate_content(
+        model="gemini-2.0-flash",
+        contents="say hi"
+    )
+    print(f"GEMINI OK: {response.text}")
+except Exception as e:
+    print(f"GEMINI ERRO: {e}")
 
-def pensar_com_gemini(texto_tweet):
-    prompt = f"Create a short, aggressive sales reply (max 180 chars) for this tweet: '{texto_tweet}'. Sell automation for $29.99. Use this link: https://buy.stripe.com/test_9B614meMU0AO7WM7ISeIw00. English only."
-    try:
-        response = client_ai.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt
-        )
-        return response.text
-    except:
-        return "Automate your business for just $29.99! Check it out: https://buy.stripe.com/test_9B614meMU0AO7WM7ISeIw00"
-
-def cacar():
-    print("CLAW: Cacando com o cerebro do Gemini...")
-    query = "need to automate my business OR marketing agency help -is:retweet"
-    try:
-        tweets = client.search_recent_tweets(query=query, max_results=5)
-        if tweets.data:
-            for tweet in tweets.data:
-                resposta = pensar_com_gemini(tweet.text)
-                client.create_tweet(text=resposta, in_reply_to_tweet_id=tweet.id)
-                print("Respondido com sucesso!")
-                time.sleep(60)
-    except Exception as e:
-        print(f"Erro: {e}")
-
-if __name__ == "__main__":
-    while True:
-        cacar()
-        time.sleep(900)
+try:
+    client = tweepy.Client(
+        consumer_key=X_API_KEY, consumer_secret=X_API_SECRET,
+        access_token=X_ACCESS_TOKEN, access_token_secret=X_ACCESS_SECRET
+    )
+    me = client.get_me()
+    print(f"TWITTER OK: {me}")
+except Exception as e:
+    print(f"TWITTER ERRO: {e}")
