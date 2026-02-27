@@ -1,6 +1,6 @@
 import os
 import tweepy
-import google.generativeai as genai
+from google import genai
 import time
 
 # 1. Chaves do Railway
@@ -11,8 +11,7 @@ X_ACCESS_SECRET = os.getenv("X_ACCESS_SECRET")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Configurar Gemini
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+client_ai = genai.Client(api_key=GEMINI_API_KEY)
 
 # Configurar X
 client = tweepy.Client(
@@ -23,7 +22,10 @@ client = tweepy.Client(
 def pensar_com_gemini(texto_tweet):
     prompt = f"Create a short, aggressive sales reply (max 180 chars) for this tweet: '{texto_tweet}'. Sell automation for $29.99. Use this link: https://buy.stripe.com/test_9B614meMU0AO7WM7ISeIw00. English only."
     try:
-        response = model.generate_content(prompt)
+        response = client_ai.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt
+        )
         return response.text
     except:
         return "Automate your business for just $29.99! Check it out: https://buy.stripe.com/test_9B614meMU0AO7WM7ISeIw00"
@@ -46,3 +48,9 @@ if __name__ == "__main__":
     while True:
         caçar()
         time.sleep(900)
+```
+
+**No `requirements.txt` troca para:**
+```
+tweepy
+google-genai
