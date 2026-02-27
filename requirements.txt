@@ -1,2 +1,2 @@
 tweepy
-google-generativeai
+google-genai
