@@ -3,11 +3,17 @@ import requests
 from groq import Groq
 import time
 import json
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 
-LEMONSQUEEZY_API_KEY = os.getenv("LEMONSQUEEZY_API_KEY")
-LEMONSQUEEZY_STORE_ID = os.getenv("LEMONSQUEEZY_STORE_ID")
 DEVTO_API_KEY = os.getenv("DEVTO_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GMAIL_USER = os.getenv("GMAIL_USER")
+GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD")
+EMAIL_DESTINO = os.getenv("EMAIL_DESTINO")
 
 client_ai = Groq(api_key=GROQ_API_KEY)
 
@@ -43,49 +49,47 @@ def escrever_ebook(info):
     Format with clear headers and sections."""
     return perguntar_ai(prompt)
 
-def publicar_lemonsqueezy(info, conteudo):
-    print("Publicando no Lemon Squeezy...")
-    headers = {
-        "Authorization": f"Bearer {LEMONSQUEEZY_API_KEY}",
-        "Content-Type": "application/vnd.api+json",
-        "Accept": "application/vnd.api+json"
-    }
-    data = {
-        "data": {
-            "type": "products",
-            "attributes": {
-                "name": info["title"],
-                "description": info["description"],
-            },
-            "relationships": {
-                "store": {
-                    "data": {
-                        "type": "stores",
-                        "id": str(LEMONSQUEEZY_STORE_ID)
-                    }
-                }
-            }
-        }
-    }
-    response = requests.post(
-        "https://api.lemonsqueezy.com/v1/products",
-        headers=headers,
-        json=data
-    )
-    print(f"LemonSqueezy status: {response.status_code}")
-    print(f"LemonSqueezy response: {response.text[:300]}")
+def enviar_email(info, conteudo):
+    print("Enviando ebook por email...")
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = GMAIL_USER
+        msg['To'] = EMAIL_DESTINO
+        msg['Subject'] = f"CLAW: Novo ebook pronto - {info['title']}"
 
-    if response.status_code in [200, 201]:
-        result = response.json()
-        product_id = result["data"]["id"]
-        product_url = f"https://clawagencyhq.lemonsqueezy.com/buy/{product_id}"
-        print(f"Produto criado: {product_url}")
-        return product_url
-    else:
-        print(f"Erro LemonSqueezy: {response.text}")
-        return None
+        corpo = f"""
+Ola! O CLAW gerou um novo ebook para voce publicar.
 
-def publicar_devto(info, product_url):
+TITULO: {info['title']}
+DESCRICAO: {info['description']}
+PRECO SUGERIDO: ${info['price']}
+KEYWORDS: {', '.join(info['keywords'])}
+
+INSTRUCOES:
+1. Copie o conteudo do ebook abaixo
+2. Cole em um documento Word ou Google Docs
+3. Salve como PDF
+4. Faca upload no Payhip (payhip.com) ou Gumroad
+5. Me mande o link do produto
+
+------- CONTEUDO DO EBOOK -------
+
+{conteudo}
+"""
+        msg.attach(MIMEText(corpo, 'plain'))
+
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(GMAIL_USER, GMAIL_PASSWORD.replace(' ', ''))
+        server.sendmail(GMAIL_USER, EMAIL_DESTINO, msg.as_string())
+        server.quit()
+        print(f"Email enviado para {EMAIL_DESTINO}")
+        return True
+    except Exception as e:
+        print(f"Erro ao enviar email: {e}")
+        return False
+
+def publicar_devto(info, product_url="https://payhip.com"):
     print("Publicando artigo no Dev.to...")
     prompt = f"""Write a compelling blog article (800 words) about "{info['title']}". 
     It should educate readers and naturally mention that a complete guide is available at {product_url}.
@@ -123,12 +127,9 @@ def executar():
         info = pesquisar_tendencias()
         print(f"Topico escolhido: {info['title']}")
         conteudo = escrever_ebook(info)
-        product_url = publicar_lemonsqueezy(info, conteudo)
-        if product_url:
-            publicar_devto(info, product_url)
-            print("Ciclo completo! Produto no ar.")
-        else:
-            print("Falhou ao publicar no Lemon Squeezy.")
+        enviar_email(info, conteudo)
+        publicar_devto(info)
+        print("Ciclo completo!")
     except Exception as e:
         print(f"Erro: {e}")
 
