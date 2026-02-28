@@ -4,7 +4,8 @@ from groq import Groq
 import time
 import json
 
-GUMROAD_TOKEN = os.getenv("GUMROAD_TOKEN")
+LEMONSQUEEZY_API_KEY = os.getenv("LEMONSQUEEZY_API_KEY")
+LEMONSQUEEZY_STORE_ID = os.getenv("LEMONSQUEEZY_STORE_ID")
 DEVTO_API_KEY = os.getenv("DEVTO_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
@@ -42,32 +43,46 @@ def escrever_ebook(info):
     Format with clear headers and sections."""
     return perguntar_ai(prompt)
 
-def publicar_gumroad(info, conteudo):
-    print("Publicando no Gumroad...")
-    params = {
-        "access_token": GUMROAD_TOKEN,
-        "name": info["title"],
-        "description": info["description"],
-        "price": int(info["price"] * 100),
+def publicar_lemonsqueezy(info, conteudo):
+    print("Publicando no Lemon Squeezy...")
+    headers = {
+        "Authorization": f"Bearer {LEMONSQUEEZY_API_KEY}",
+        "Content-Type": "application/vnd.api+json",
+        "Accept": "application/vnd.api+json"
+    }
+    data = {
+        "data": {
+            "type": "products",
+            "attributes": {
+                "name": info["title"],
+                "description": info["description"],
+            },
+            "relationships": {
+                "store": {
+                    "data": {
+                        "type": "stores",
+                        "id": str(LEMONSQUEEZY_STORE_ID)
+                    }
+                }
+            }
+        }
     }
     response = requests.post(
-        "https://api.gumroad.com/v2/products",
-        params=params
+        "https://api.lemonsqueezy.com/v1/products",
+        headers=headers,
+        json=data
     )
-    print(f"Gumroad status: {response.status_code}")
-    print(f"Gumroad response: {response.text[:300]}")
-    
+    print(f"LemonSqueezy status: {response.status_code}")
+    print(f"LemonSqueezy response: {response.text[:300]}")
+
     if response.status_code in [200, 201]:
         result = response.json()
-        if result.get("success"):
-            product_url = result["product"]["short_url"]
-            print(f"Produto criado: {product_url}")
-            return product_url
-        else:
-            print(f"Erro Gumroad: {result}")
-            return None
+        product_id = result["data"]["id"]
+        product_url = f"https://clawagencyhq.lemonsqueezy.com/buy/{product_id}"
+        print(f"Produto criado: {product_url}")
+        return product_url
     else:
-        print(f"Erro HTTP Gumroad: {response.status_code}")
+        print(f"Erro LemonSqueezy: {response.text}")
         return None
 
 def publicar_devto(info, product_url):
@@ -108,12 +123,12 @@ def executar():
         info = pesquisar_tendencias()
         print(f"Topico escolhido: {info['title']}")
         conteudo = escrever_ebook(info)
-        product_url = publicar_gumroad(info, conteudo)
+        product_url = publicar_lemonsqueezy(info, conteudo)
         if product_url:
             publicar_devto(info, product_url)
             print("Ciclo completo! Produto no ar.")
         else:
-            print("Falhou ao publicar no Gumroad.")
+            print("Falhou ao publicar no Lemon Squeezy.")
     except Exception as e:
         print(f"Erro: {e}")
 
