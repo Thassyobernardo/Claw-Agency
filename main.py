@@ -1,21 +1,21 @@
 import os
 import requests
-from google import genai
+from groq import Groq
 import time
 import json
 
 GUMROAD_TOKEN = os.getenv("GUMROAD_TOKEN")
 DEVTO_API_KEY = os.getenv("DEVTO_API_KEY")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-client_ai = genai.Client(api_key=GEMINI_API_KEY)
+client_ai = Groq(api_key=GROQ_API_KEY)
 
-def perguntar_gemini(prompt):
-    response = client_ai.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt
+def perguntar_ai(prompt):
+    response = client_ai.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[{"role": "user", "content": prompt}]
     )
-    return response.text
+    return response.choices[0].message.content
 
 def pesquisar_tendencias():
     print("Pesquisando tendencias...")
@@ -27,7 +27,7 @@ def pesquisar_tendencias():
         "price": 19.99,
         "keywords": ["kw1", "kw2"]
     }"""
-    text = perguntar_gemini(prompt).strip()
+    text = perguntar_ai(prompt).strip()
     if "```json" in text:
         text = text.split("```json")[1].split("```")[0]
     elif "```" in text:
@@ -40,7 +40,7 @@ def escrever_ebook(info):
     Include: Introduction, 5 detailed chapters with practical tips, and Conclusion.
     Make it valuable, actionable and at least 2000 words.
     Format with clear headers and sections."""
-    return perguntar_gemini(prompt)
+    return perguntar_ai(prompt)
 
 def publicar_gumroad(info, conteudo):
     print("Publicando no Gumroad...")
@@ -70,7 +70,7 @@ def publicar_devto(info, product_url):
     prompt = f"""Write a compelling blog article (800 words) about "{info['title']}". 
     It should educate readers and naturally mention that a complete guide is available at {product_url}.
     Use markdown format. Make it SEO friendly."""
-    artigo = perguntar_gemini(prompt)
+    artigo = perguntar_ai(prompt)
 
     headers = {
         "api-key": DEVTO_API_KEY,
