@@ -1,47 +1,131 @@
 import os
-import tweepy
+import requests
 from google import genai
 import time
+import json
 
-X_API_KEY = os.getenv("TWITTER_API_KEY")
-X_API_SECRET = os.getenv("TWITTER_API_SECRET")
-X_ACCESS_TOKEN = os.getenv("TWITTER_ACCESS_TOKEN")
-X_ACCESS_SECRET = os.getenv("TWITTER_ACCESS_TOKEN_SECRET")
+GUMROAD_TOKEN = os.getenv("GUMROAD_TOKEN")
+DEVTO_API_KEY = os.getenv("DEVTO_API_KEY")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 client_ai = genai.Client(api_key=GEMINI_API_KEY)
 
-client = tweepy.Client(
-    consumer_key=X_API_KEY, consumer_secret=X_API_SECRET,
-    access_token=X_ACCESS_TOKEN, access_token_secret=X_ACCESS_SECRET
-)
+def pesquisar_tendencias():
+    print("Pesquisando tendencias...")
+    prompt = """You are a market research expert. Analyze current trends and identify the TOP 1 most profitable ebook topic right now in 2026. Focus on: AI tools, automation, making money online, productivity. Return ONLY a JSON like this:
+    {
+        "topic": "topic name",
+        "title": "ebook title",
+        "description": "short description",
+        "price": 19.99,
+        "keywords": ["kw1", "kw2"]
+    }"""
+    response = client_ai.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt
+    )
+    text = response.text.strip()
+    if "```json" in text:
+        text = text.split("```json")[1].split("```")[0]
+    elif "```" in text:
+        text = text.split("```")[1].split("```")[0]
+    return json.loads(text.strip())
 
-def pensar_com_gemini(texto_tweet):
-    prompt = f"Create a short, aggressive sales reply (max 180 chars) for this tweet: '{texto_tweet}'. Sell automation for $29.99. Use this link: https://buy.stripe.com/test_9B614meMU0AO7WM7ISeIw00. English only."
-    try:
-        response = client_ai.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt
-        )
-        return response.text
-    except:
-        return "Automate your business for just $29.99! Check it out: https://buy.stripe.com/test_9B614meMU0AO7WM7ISeIw00"
+def escrever_ebook(info):
+    print(f"Escrevendo ebook: {info['title']}...")
+    prompt = f"""Write a complete, professional ebook about "{info['title']}". 
+    Include: Introduction, 5 detailed chapters with practical tips, and Conclusion.
+    Make it valuable, actionable and at least 2000 words.
+    Format with clear headers and sections."""
+    response = client_ai.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt
+    )
+    return response.text
 
-def cacar():
-    print("CLAW: Cacando com o cerebro do Gemini...")
-    query = "need to automate my business OR marketing agency help -is:retweet"
+def publicar_gumroad(info, conteudo):
+    print("Publicando no Gumroad...")
+    headers = {"Authorization": f"Bearer {GUMROAD_TOKEN}"}
+    data = {
+        "name": info["title"],
+        "description": info["description"],
+        "price": int(info["price"] * 100),
+        "url": info["title"].lower().replace(" ", "-"),
+    }
+    response = requests.post(
+        "https://api.gumroad.com/v2/products",
+        headers=headers,
+        data=data
+    )
+    result = response.json()
+    if result.get("success"):
+        product_url = result["product"]["short_url"]
+        print(f"Produto criado: {product_url}")
+        return product_url
+    else:
+        print(f"Erro Gumroad: {result}")
+        return None
+
+def publicar_devto(info, product_url):
+    print("Publicando artigo no Dev.to...")
+    prompt = f"""Write a compelling blog article (800 words) about "{info['title']}". 
+    It should educate readers and naturally mention that a complete guide is available at {product_url}.
+    Use markdown format. Make it SEO friendly."""
+    response = client_ai.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt
+    )
+    artigo = response.text
+
+    headers = {
+        "api-key": DEVTO_API_KEY,
+        "Content-Type": "application/json"
+    }
+    data = {
+        "article": {
+            "title": info["title"],
+            "published": True,
+            "body_markdown": artigo,
+            "tags": info["keywords"][:4]
+        }
+    }
+    response = requests.post(
+        "https://dev.to/api/articles",
+        headers=headers,
+        json=data
+    )
+    if response.status_code == 201:
+        url = response.json().get("url")
+        print(f"Artigo publicado: {url}")
+        return url
+    else:
+        print(f"Erro Dev.to: {response.text}")
+        return None
+
+def executar():
+    print("CLAW: Iniciando ciclo de vendas...")
     try:
-        tweets = client.search_recent_tweets(query=query, max_results=5)
-        if tweets.data:
-            for tweet in tweets.data:
-                resposta = pensar_com_gemini(tweet.text)
-                client.create_tweet(text=resposta, in_reply_to_tweet_id=tweet.id)
-                print("Respondido com sucesso!")
-                time.sleep(60)
+        info = pesquisar_tendencias()
+        print(f"Topico escolhido: {info['title']}")
+        conteudo = escrever_ebook(info)
+        product_url = publicar_gumroad(info, conteudo)
+        if product_url:
+            publicar_devto(info, product_url)
+            print("Ciclo completo! Produto no ar.")
+        else:
+            print("Falhou ao publicar no Gumroad.")
     except Exception as e:
         print(f"Erro: {e}")
 
 if __name__ == "__main__":
+    executar()
     while True:
-        cacar()
-        time.sleep(900)
+        print("Aguardando 24h para proximo ciclo...")
+        time.sleep(86400)
+        executar()
+```
+
+**No `requirements.txt`:**
+```
+requests
+google-genai
