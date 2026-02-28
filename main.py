@@ -96,7 +96,7 @@ def publicar_devto(info):
             "title": info["title"],
             "published": True,
             "body_markdown": artigo,
-            "tags": info["keywords"][:4]
+            "tags": ["ai", "productivity", "business", "automation"]
         }
     }
     response = requests.post(
