@@ -76,8 +76,7 @@ INSTRUCOES:
 """
         msg.attach(MIMEText(corpo, 'plain'))
         print("Conectando ao Gmail SMTP...")
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
+        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
         print("Fazendo login...")
         server.login(GMAIL_USER, GMAIL_PASSWORD.replace(' ', ''))
         print("Enviando mensagem...")
