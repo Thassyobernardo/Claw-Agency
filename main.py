@@ -6,8 +6,7 @@ import json
 import smtplib
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.mime.base import MIMEBase
-from email import encoders
+import traceback
 
 DEVTO_API_KEY = os.getenv("DEVTO_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -17,24 +16,24 @@ EMAIL_DESTINO = os.getenv("EMAIL_DESTINO")
 
 client_ai = Groq(api_key=GROQ_API_KEY)
 
-def perguntar_ai(prompt):
+def perguntar_ai(prompt, max_tokens=1000):
     response = client_ai.chat.completions.create(
         model="llama-3.3-70b-versatile",
-        messages=[{"role": "user", "content": prompt}]
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=max_tokens
     )
     return response.choices[0].message.content
 
 def pesquisar_tendencias():
     print("Pesquisando tendencias...")
-    prompt = """You are a market research expert. Analyze current trends and identify the TOP 1 most profitable ebook topic right now in 2026. Focus on: AI tools, automation, making money online, productivity. Return ONLY a JSON like this:
+    prompt = """Identify the TOP 1 most profitable ebook topic in 2026. Return ONLY a JSON:
     {
-        "topic": "topic name",
         "title": "ebook title",
-        "description": "short description",
+        "description": "one sentence description",
         "price": 19.99,
-        "keywords": ["kw1", "kw2"]
+        "keywords": ["kw1", "kw2", "kw3"]
     }"""
-    text = perguntar_ai(prompt).strip()
+    text = perguntar_ai(prompt, max_tokens=200).strip()
     if "```json" in text:
         text = text.split("```json")[1].split("```")[0]
     elif "```" in text:
@@ -43,59 +42,59 @@ def pesquisar_tendencias():
 
 def escrever_ebook(info):
     print(f"Escrevendo ebook: {info['title']}...")
-    prompt = f"""Write a complete, professional ebook about "{info['title']}". 
-    Include: Introduction, 5 detailed chapters with practical tips, and Conclusion.
-    Make it valuable, actionable and at least 2000 words.
-    Format with clear headers and sections."""
-    return perguntar_ai(prompt)
+    prompt = f"""Write a professional ebook outline about "{info['title']}". 
+    Include: Introduction, 5 chapter titles with 3 bullet points each, and Conclusion.
+    Keep it concise but valuable."""
+    return perguntar_ai(prompt, max_tokens=800)
 
 def enviar_email(info, conteudo):
     print("Enviando ebook por email...")
+    print(f"GMAIL_USER: {GMAIL_USER}")
+    print(f"EMAIL_DESTINO: {EMAIL_DESTINO}")
+    print(f"PASSWORD definida: {bool(GMAIL_PASSWORD)}")
     try:
         msg = MIMEMultipart()
         msg['From'] = GMAIL_USER
         msg['To'] = EMAIL_DESTINO
         msg['Subject'] = f"CLAW: Novo ebook pronto - {info['title']}"
-
         corpo = f"""
-Ola! O CLAW gerou um novo ebook para voce publicar.
+CLAW gerou um novo ebook!
 
 TITULO: {info['title']}
 DESCRICAO: {info['description']}
 PRECO SUGERIDO: ${info['price']}
-KEYWORDS: {', '.join(info['keywords'])}
 
 INSTRUCOES:
-1. Copie o conteudo do ebook abaixo
-2. Cole em um documento Word ou Google Docs
-3. Salve como PDF
-4. Faca upload no Payhip (payhip.com) ou Gumroad
-5. Me mande o link do produto
+1. Copie o conteudo abaixo
+2. Cole no Google Docs e salve como PDF
+3. Faca upload no Payhip (payhip.com)
+4. Me mande o link do produto
 
-------- CONTEUDO DO EBOOK -------
+------- CONTEUDO -------
 
 {conteudo}
 """
         msg.attach(MIMEText(corpo, 'plain'))
-
+        print("Conectando ao Gmail SMTP...")
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
+        print("Fazendo login...")
         server.login(GMAIL_USER, GMAIL_PASSWORD.replace(' ', ''))
+        print("Enviando mensagem...")
         server.sendmail(GMAIL_USER, EMAIL_DESTINO, msg.as_string())
         server.quit()
-        print(f"Email enviado para {EMAIL_DESTINO}")
+        print(f"Email enviado com sucesso para {EMAIL_DESTINO}")
         return True
     except Exception as e:
-        print(f"Erro ao enviar email: {e}")
+        print(f"ERRO ao enviar email: {e}")
+        traceback.print_exc()
         return False
 
-def publicar_devto(info, product_url="https://payhip.com"):
+def publicar_devto(info):
     print("Publicando artigo no Dev.to...")
-    prompt = f"""Write a compelling blog article (800 words) about "{info['title']}". 
-    It should educate readers and naturally mention that a complete guide is available at {product_url}.
-    Use markdown format. Make it SEO friendly."""
-    artigo = perguntar_ai(prompt)
-
+    prompt = f"""Write a short blog article (400 words) about "{info['title']}". 
+    Use markdown. End with a call to action to learn more."""
+    artigo = perguntar_ai(prompt, max_tokens=600)
     headers = {
         "api-key": DEVTO_API_KEY,
         "Content-Type": "application/json"
@@ -116,10 +115,8 @@ def publicar_devto(info, product_url="https://payhip.com"):
     if response.status_code == 201:
         url = response.json().get("url")
         print(f"Artigo publicado: {url}")
-        return url
     else:
         print(f"Erro Dev.to: {response.text}")
-        return None
 
 def executar():
     print("CLAW: Iniciando ciclo de vendas...")
@@ -131,7 +128,8 @@ def executar():
         publicar_devto(info)
         print("Ciclo completo!")
     except Exception as e:
-        print(f"Erro: {e}")
+        print(f"Erro geral: {e}")
+        traceback.print_exc()
 
 if __name__ == "__main__":
     executar()
