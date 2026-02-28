@@ -123,9 +123,3 @@ if __name__ == "__main__":
         print("Aguardando 24h para proximo ciclo...")
         time.sleep(86400)
         executar()
-```
-
-**No `requirements.txt`:**
-```
-requests
-google-genai
