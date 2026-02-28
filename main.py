@@ -3,15 +3,11 @@ import requests
 from groq import Groq
 import time
 import json
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 import traceback
 
 DEVTO_API_KEY = os.getenv("DEVTO_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GMAIL_USER = os.getenv("GMAIL_USER")
-GMAIL_PASSWORD = os.getenv("GMAIL_PASSWORD")
+RESEND_API_KEY = os.getenv("RESEND_API_KEY")
 EMAIL_DESTINO = os.getenv("EMAIL_DESTINO")
 
 client_ai = Groq(api_key=GROQ_API_KEY)
@@ -48,16 +44,8 @@ def escrever_ebook(info):
     return perguntar_ai(prompt, max_tokens=800)
 
 def enviar_email(info, conteudo):
-    print("Enviando ebook por email...")
-    print(f"GMAIL_USER: {GMAIL_USER}")
-    print(f"EMAIL_DESTINO: {EMAIL_DESTINO}")
-    print(f"PASSWORD definida: {bool(GMAIL_PASSWORD)}")
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = GMAIL_USER
-        msg['To'] = EMAIL_DESTINO
-        msg['Subject'] = f"CLAW: Novo ebook pronto - {info['title']}"
-        corpo = f"""
+    print("Enviando ebook por email via Resend...")
+    corpo = f"""
 CLAW gerou um novo ebook!
 
 TITULO: {info['title']}
@@ -74,19 +62,24 @@ INSTRUCOES:
 
 {conteudo}
 """
-        msg.attach(MIMEText(corpo, 'plain'))
-        print("Conectando ao Gmail SMTP...")
-        server = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-        print("Fazendo login...")
-        server.login(GMAIL_USER, GMAIL_PASSWORD.replace(' ', ''))
-        print("Enviando mensagem...")
-        server.sendmail(GMAIL_USER, EMAIL_DESTINO, msg.as_string())
-        server.quit()
+    response = requests.post(
+        "https://api.resend.com/emails",
+        headers={
+            "Authorization": f"Bearer {RESEND_API_KEY}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "from": "CLAW <onboarding@resend.dev>",
+            "to": [EMAIL_DESTINO],
+            "subject": f"CLAW: Novo ebook pronto - {info['title']}",
+            "text": corpo
+        }
+    )
+    if response.status_code == 200:
         print(f"Email enviado com sucesso para {EMAIL_DESTINO}")
         return True
-    except Exception as e:
-        print(f"ERRO ao enviar email: {e}")
-        traceback.print_exc()
+    else:
+        print(f"Erro Resend: {response.status_code} - {response.text}")
         return False
 
 def publicar_devto(info):
