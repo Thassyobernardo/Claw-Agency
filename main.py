@@ -44,24 +44,20 @@ def escrever_ebook(info):
 
 def publicar_gumroad(info, conteudo):
     print("Publicando no Gumroad...")
-    headers = {
-        "Authorization": f"Bearer {GUMROAD_TOKEN}",
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-    data = {
+    params = {
+        "access_token": GUMROAD_TOKEN,
         "name": info["title"],
         "description": info["description"],
         "price": int(info["price"] * 100),
     }
     response = requests.post(
         "https://api.gumroad.com/v2/products",
-        headers=headers,
-        data=data
+        params=params
     )
     print(f"Gumroad status: {response.status_code}")
     print(f"Gumroad response: {response.text[:300]}")
     
-    if response.status_code == 200 or response.status_code == 201:
+    if response.status_code in [200, 201]:
         result = response.json()
         if result.get("success"):
             product_url = result["product"]["short_url"]
