@@ -198,54 +198,44 @@ ARTICLE_TOPICS = [
 ]
 
 def generate_devto_article(topic):
-    system = """You are an expert content creator writing for Dev.to.
-    Write practical, honest articles about making money with AI tools.
-    Style: direct, no fluff, real examples, actionable steps.
-    Always include code snippets or prompt examples when relevant.
-    IMPORTANT: Return ONLY valid JSON, no markdown, no code fences, no explanation."""
+    """Two-step generation: body first, then tags. Avoids JSON truncation."""
+    # Step 1: generate the article body
+    body = groq(
+        "You are an expert content creator for Dev.to. Write practical articles about making money with AI. "
+        "Style: direct, real examples, actual numbers, copy-paste prompts. No fluff.",
+        f"""Write a Dev.to article about: "{topic}"
 
-    user = f"""Write a complete Dev.to article about: "{topic}"
+Use this structure:
+- Start with a strong hook paragraph (no heading)
+- 4 sections with ## headings
+- Include at least one code block or prompt example
+- End with this exact paragraph (fill in naturally):
+  "If you want to go deeper, I put together the AI Mastery Course — 15 lessons covering prompt engineering, content systems, and automation clients. It includes all the prompts and Python scripts I use. You can get it at {GUMROAD_LINK} for $47."
 
-    Return ONLY a JSON object with these exact keys:
-    - "title": punchy article title string
-    - "body": full article in markdown (min 800 words, use ## headers, include real prompts/code examples)
-    - "tags": array of exactly 4 strings like ["ai", "productivity", "career", "tutorial"]
-
-    At the end of the body, add a natural paragraph mentioning the AI Mastery Course
-    (15 lessons, $47, link: {GUMROAD_LINK}) as something the author created.
-
-    Return ONLY the JSON object. No markdown fences. No explanation before or after."""
-
-    result = groq(system, user, max_tokens=3000)
-    if not result:
-        log_event("article_error", "Groq returned None")
+Write the full article now. Plain markdown only.""",
+        max_tokens=2000
+    )
+    if not body:
+        log_event("article_error", "Groq body generation failed")
         return None
+
+    # Step 2: generate tags only (tiny call, no truncation risk)
+    tags_raw = groq(
+        "Return ONLY a JSON array of 4 strings. No explanation. No markdown.",
+        f'Give 4 Dev.to tags for an article about: "{topic}". Example: ["ai","productivity","tutorial","career"]',
+        max_tokens=50
+    )
     try:
-        clean = result.strip()
-        # Remove markdown fences if present
-        if "```" in clean:
-            parts = clean.split("```")
-            for part in parts:
-                part = part.strip()
-                if part.startswith("json"):
-                    part = part[4:].strip()
-                if part.startswith("{"):
-                    clean = part
-                    break
-        # Find JSON object boundaries
-        start = clean.find("{")
-        end = clean.rfind("}") + 1
-        if start >= 0 and end > start:
-            clean = clean[start:end]
-        data = json.loads(clean)
-        # Validate required keys
-        if "title" in data and "body" in data and "tags" in data:
-            return data
-        log_event("article_error", f"Missing keys in JSON: {list(data.keys())}")
-        return None
-    except Exception as e:
-        log_event("article_error", f"JSON parse failed: {str(e)[:100]}")
-        return None
+        tags_clean = tags_raw.strip() if tags_raw else '["ai","productivity","tutorial","career"]'
+        if "[" in tags_clean:
+            tags_clean = tags_clean[tags_clean.find("["):tags_clean.rfind("]")+1]
+        tags = json.loads(tags_clean)
+        if not isinstance(tags, list):
+            tags = ["ai", "productivity", "tutorial", "career"]
+    except:
+        tags = ["ai", "productivity", "tutorial", "career"]
+
+    return {"title": topic, "body": body, "tags": tags[:4]}
 
 def post_to_devto(article_data):
     try:
