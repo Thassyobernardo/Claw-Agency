@@ -201,35 +201,50 @@ def generate_devto_article(topic):
     system = """You are an expert content creator writing for Dev.to.
     Write practical, honest articles about making money with AI tools.
     Style: direct, no fluff, real examples, actionable steps.
-    Always include code snippets or prompt examples when relevant."""
+    Always include code snippets or prompt examples when relevant.
+    IMPORTANT: Return ONLY valid JSON, no markdown, no code fences, no explanation."""
 
     user = f"""Write a complete Dev.to article about: "{topic}"
 
-    Format:
-    - Title (the topic, punchy)
-    - Introduction (2 paragraphs, hook immediately)
-    - 4-5 sections with ## headers
-    - Real examples, actual numbers, copy-paste prompts or code
-    - Conclusion with a clear next step
-    - Tags: 4 tags relevant to AI, productivity, career
+    Return ONLY a JSON object with these exact keys:
+    - "title": punchy article title string
+    - "body": full article in markdown (min 800 words, use ## headers, include real prompts/code examples)
+    - "tags": array of exactly 4 strings like ["ai", "productivity", "career", "tutorial"]
 
-    At the end include a natural CTA paragraph mentioning the AI Mastery Course
-    (15 lessons, $47, link: {GUMROAD_LINK}) as something the author built.
+    At the end of the body, add a natural paragraph mentioning the AI Mastery Course
+    (15 lessons, $47, link: {GUMROAD_LINK}) as something the author created.
 
-    Return as JSON: {{"title": "...", "body": "...", "tags": ["tag1","tag2","tag3","tag4"]}}"""
+    Return ONLY the JSON object. No markdown fences. No explanation before or after."""
 
     result = groq(system, user, max_tokens=3000)
     if not result:
+        log_event("article_error", "Groq returned None")
         return None
     try:
-        # Strip markdown code fences if present
         clean = result.strip()
-        if clean.startswith("```"):
-            clean = clean.split("```")[1]
-            if clean.startswith("json"):
-                clean = clean[4:]
-        return json.loads(clean.strip())
-    except:
+        # Remove markdown fences if present
+        if "```" in clean:
+            parts = clean.split("```")
+            for part in parts:
+                part = part.strip()
+                if part.startswith("json"):
+                    part = part[4:].strip()
+                if part.startswith("{"):
+                    clean = part
+                    break
+        # Find JSON object boundaries
+        start = clean.find("{")
+        end = clean.rfind("}") + 1
+        if start >= 0 and end > start:
+            clean = clean[start:end]
+        data = json.loads(clean)
+        # Validate required keys
+        if "title" in data and "body" in data and "tags" in data:
+            return data
+        log_event("article_error", f"Missing keys in JSON: {list(data.keys())}")
+        return None
+    except Exception as e:
+        log_event("article_error", f"JSON parse failed: {str(e)[:100]}")
         return None
 
 def post_to_devto(article_data):
