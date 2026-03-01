@@ -22,7 +22,7 @@ EMAIL_FROM     = os.environ.get("EMAIL_FROM", "noreply@clawagency.com")
 EMAIL_DESTINO  = os.environ.get("EMAIL_DESTINO", "")
 GUMROAD_LINK   = os.environ.get("GUMROAD_LINK", "https://gumroad.com/l/ai-mastery-course")
 COURSE_PRICE   = "$47"
-DB_PATH        = "claw.db"
+DB_PATH        = "/tmp/claw.db"
 
 # ─── DATABASE ─────────────────────────────────────────────────────────────────
 def init_db():
@@ -512,28 +512,40 @@ def subscribe():
 
 @app.route("/admin")
 def admin():
-    conn = sqlite3.connect(DB_PATH)
-    leads = conn.execute("SELECT email, name, source, created_at, email_step FROM leads ORDER BY created_at DESC LIMIT 50").fetchall()
-    articles = conn.execute("SELECT title, posted_at FROM articles ORDER BY posted_at DESC").fetchall()
-    events = conn.execute("SELECT event, details, created_at FROM events ORDER BY created_at DESC LIMIT 30").fetchall()
-    conn.close()
-    html = f"""<!DOCTYPE html><html><head><title>Claw Admin</title>
-    <style>body{{background:#0a0a0f;color:#e0e0e0;font-family:monospace;padding:24px}}
-    h2{{color:#f0c060;margin:24px 0 12px}}table{{width:100%;border-collapse:collapse;font-size:13px}}
-    td,th{{border:1px solid #222;padding:8px 12px;text-align:left}}th{{background:#111;color:#f0c060}}
-    tr:hover td{{background:#111}}</style></head><body>
-    <h1 style="color:#f0c060">⚡ Claw Admin</h1>
-    <p style="color:#666">Leads: {len(leads)} | Articles: {len(articles)}</p>
-    <h2>Recent Leads</h2><table><tr><th>Email</th><th>Name</th><th>Source</th><th>Date</th><th>Step</th></tr>
-    {''.join(f"<tr><td>{l[0]}</td><td>{l[1]}</td><td>{l[2]}</td><td>{l[3][:16]}</td><td>{l[4]}/{len(EMAIL_SEQUENCE)}</td></tr>" for l in leads)}
-    </table>
-    <h2>Articles Posted</h2><table><tr><th>Title</th><th>Posted</th></tr>
-    {''.join(f"<tr><td>{a[0]}</td><td>{a[1][:16]}</td></tr>" for a in articles)}
-    </table>
-    <h2>Event Log</h2><table><tr><th>Event</th><th>Details</th><th>Time</th></tr>
-    {''.join(f"<tr><td>{e[0]}</td><td>{e[1][:60]}</td><td>{e[2][:16]}</td></tr>" for e in events)}
-    </table></body></html>"""
-    return html
+    try:
+        init_db()
+        conn = sqlite3.connect(DB_PATH)
+        leads = conn.execute("SELECT email, name, source, created_at, email_step FROM leads ORDER BY created_at DESC LIMIT 50").fetchall()
+        articles = conn.execute("SELECT title, posted_at FROM articles ORDER BY posted_at DESC").fetchall()
+        events = conn.execute("SELECT event, details, created_at FROM events ORDER BY created_at DESC LIMIT 30").fetchall()
+        conn.close()
+        n_seq = len(EMAIL_SEQUENCE)
+        leads_rows = "".join(f"<tr><td>{l[0]}</td><td>{l[1]}</td><td>{l[2]}</td><td>{str(l[3])[:16]}</td><td>{l[4]}/{n_seq}</td></tr>" for l in leads) or "<tr><td colspan=5 style=color:#555>No leads yet</td></tr>"
+        articles_rows = "".join(f"<tr><td>{a[0]}</td><td>{str(a[1])[:16]}</td></tr>" for a in articles) or "<tr><td colspan=2 style=color:#555>No articles yet</td></tr>"
+        events_rows = "".join(f"<tr><td>{e[0]}</td><td>{str(e[1])[:60]}</td><td>{str(e[2])[:16]}</td></tr>" for e in events) or "<tr><td colspan=3 style=color:#555>No events yet</td></tr>"
+        html = (
+            "<!DOCTYPE html><html><head><title>Claw Admin</title>"
+            "<meta http-equiv=refresh content=30>"
+            "<style>body{background:#0a0a0f;color:#e0e0e0;font-family:monospace;padding:24px}"
+            "h2{color:#f0c060;margin:24px 0 12px}table{width:100%;border-collapse:collapse;font-size:13px}"
+            "td,th{border:1px solid #222;padding:8px 12px;text-align:left}th{background:#111;color:#f0c060}"
+            "tr:hover td{background:#111}.btn{background:#f0c060;color:#000;padding:8px 16px;border:none;border-radius:6px;cursor:pointer;font-weight:bold;text-decoration:none;display:inline-block;margin:4px}"
+            "</style></head><body>"
+            "<h1 style=color:#f0c060>⚡ Claw Admin</h1>"
+            f"<p style=color:#666>Leads: {len(leads)} | Articles: {len(articles)} | Auto-refresh: 30s</p>"
+            "<a href=/trigger/article class=btn>▶ Post Article Now</a> "
+            "<a href=/trigger/emails class=btn style=background:#50d8c8>▶ Run Email Sequences</a>"
+            "<h2>Recent Leads</h2><table><tr><th>Email</th><th>Name</th><th>Source</th><th>Date</th><th>Step</th></tr>"
+            + leads_rows +
+            "</table><h2>Articles Posted</h2><table><tr><th>Title</th><th>Posted</th></tr>"
+            + articles_rows +
+            "</table><h2>Event Log</h2><table><tr><th>Event</th><th>Details</th><th>Time</th></tr>"
+            + events_rows +
+            "</table></body></html>"
+        )
+        return html
+    except Exception as e:
+        return f"<pre style='background:#0a0a0f;color:#f44336;padding:24px'>Admin error: {str(e)}</pre>", 500
 
 @app.route("/health")
 def health():
