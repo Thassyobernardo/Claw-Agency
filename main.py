@@ -1,6 +1,8 @@
 import os
 import json
+import time
 import logging
+import threading
 from dotenv import load_dotenv
 load_dotenv()
 from datetime import datetime
@@ -240,7 +242,6 @@ def start_scheduler():
         run_scan,
         trigger=IntervalTrigger(hours=interval_hours),
         id="scan",
-        next_run_time=datetime.now(),  # run immediately on start
         replace_existing=True,
         coalesce=True,
     )
@@ -252,6 +253,18 @@ def start_scheduler():
 # Always init DB and start scheduler (works with both gunicorn and direct run)
 db.init_db()
 _scheduler = start_scheduler()
+
+# Fire the first scan in a background thread after a short delay so Flask
+# can start and pass the Railway healthcheck before heavy work begins.
+def _first_scan_delayed(delay: int = 15):
+    time.sleep(delay)
+    log.info("Running initial scan (delayed start)")
+    try:
+        run_scan()
+    except Exception as e:
+        log.error(f"Initial scan error: {e}")
+
+threading.Thread(target=_first_scan_delayed, daemon=True).start()
 
 
 if __name__ == "__main__":
