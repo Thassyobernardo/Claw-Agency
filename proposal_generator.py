@@ -66,10 +66,16 @@ def analyze_lead(source: str, title: str, description: str) -> dict:
                 ),
             }],
             temperature=0.3,
-            max_tokens=512,
+            max_tokens=2000,
         ))
-        raw = resp.choices[0].message.content.strip()
-        return json.loads(raw)
+        content = resp.choices[0].message.content
+        if not content:
+            return {}
+        try:
+            return json.loads(content.strip())
+        except json.JSONDecodeError as e:
+            log.error("analyze_lead: truncated/non-JSON response: %s", e)
+            return {}
     except BadRequestError as e:
         log.error("Cerebras 400 in analyze_lead — status=%s message=%r body=%s",
                   e.status_code, e.message, e.body)
@@ -81,9 +87,6 @@ def analyze_lead(source: str, title: str, description: str) -> dict:
     except APIConnectionError as e:
         log.error("Cerebras connection error in analyze_lead: %s", e)
         return {"error": f"Cerebras connection error: {e}", "pain_points": [], "urgency": "unknown"}
-    except json.JSONDecodeError as e:
-        log.error("Cerebras returned non-JSON in analyze_lead: %s", e)
-        return {"error": "Cerebras response was not valid JSON", "pain_points": [], "urgency": "unknown"}
     except Exception as e:
         log.error("Unexpected error in analyze_lead: %s", e, exc_info=True)
         return {"error": str(e), "pain_points": [], "urgency": "unknown"}
@@ -106,8 +109,14 @@ def generate_proposal(source: str, title: str, description: str,
             temperature=0.7,
             max_tokens=1024,
         ))
-        raw = resp.choices[0].message.content.strip()
-        return json.loads(raw)
+        content = resp.choices[0].message.content
+        if not content:
+            return {}
+        try:
+            return json.loads(content.strip())
+        except json.JSONDecodeError as e:
+            log.error("generate_proposal: truncated/non-JSON response: %s", e)
+            return {}
     except BadRequestError as e:
         log.error("Cerebras 400 in generate_proposal — status=%s message=%r body=%s",
                   e.status_code, e.message, e.body)
@@ -119,9 +128,6 @@ def generate_proposal(source: str, title: str, description: str,
     except APIConnectionError as e:
         log.error("Cerebras connection error in generate_proposal: %s", e)
         return {"error": f"Cerebras connection error: {e}", "hook": "Could not generate proposal."}
-    except json.JSONDecodeError as e:
-        log.error("Cerebras returned non-JSON in generate_proposal: %s", e)
-        return {"error": "Cerebras response was not valid JSON", "hook": "Could not generate proposal."}
     except Exception as e:
         log.error("Unexpected error in generate_proposal: %s", e, exc_info=True)
         return {"error": str(e), "hook": "Could not generate proposal."}
