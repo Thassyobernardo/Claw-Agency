@@ -22,41 +22,16 @@ log = logging.getLogger(__name__)
 BASE_URL = "https://www.upwork.com/ab/feed/jobs/rss"
 SOURCE = "upwork"
 
-# Broad keyword list — covers the niches most likely to need automation work
+# Focused on clients posting automation/chatbot/AI projects
 CORE_KEYWORDS = [
-    # Automation & workflow
     "automation",
-    "workflow automation",
-    "process automation",
-    "business automation",
-    "n8n",
-    "make.com",
+    "chatbot",
     "zapier",
-    # AI & chatbots
-    "AI automation",
-    "chatbot development",
-    "ChatGPT integration",
-    "AI agent",
-    # No-code / low-code
-    "no-code automation",
-    "bubble developer",
-    "airtable automation",
-    # CRM & email
-    "CRM automation",
-    "email automation",
-    "HubSpot automation",
-    "ActiveCampaign",
-    # Data & scraping
-    "data scraping",
-    "web scraping",
-    "data extraction",
-    "data pipeline",
-    # Dev / integration
-    "API integration",
-    "Python developer",
-    "JavaScript automation",
-    "backend developer",
-    "webhook integration",
+    "n8n",
+    "crm",
+    "whatsapp bot",
+    "workflow",
+    "ai agent",
 ]
 
 

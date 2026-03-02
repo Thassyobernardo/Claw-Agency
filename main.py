@@ -12,7 +12,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 import database as db
 import qualifier
 import builder
-from scrapers import upwork_scraper, google_scraper
+from scrapers import upwork_scraper
 
 logging.basicConfig(
     level=logging.INFO,
@@ -58,9 +58,7 @@ def fromjson_filter(value):
 def get_keywords() -> list[str]:
     raw = os.getenv(
         "KEYWORDS",
-        "zapier automation,make.com workflow,n8n automation,crm automation,"
-        "whatsapp bot,chatbot development,workflow automation,email automation,"
-        "lead generation automation,ai agent,business automation,process automation",
+        "automation,chatbot,zapier,n8n,crm,whatsapp bot,workflow,ai agent",
     )
     return [k.strip() for k in raw.split(",") if k.strip()]
 
@@ -82,13 +80,6 @@ def run_scan():
         total += n
     except Exception as e:
         log.error(f"Upwork scraper error: {e}")
-
-    try:
-        n = google_scraper.scrape(keywords)
-        log.info(f"Google/DDG: +{n} leads")
-        total += n
-    except Exception as e:
-        log.error(f"Google scraper error: {e}")
 
     log.info(f"Scan complete — {total} new leads saved")
     return total
