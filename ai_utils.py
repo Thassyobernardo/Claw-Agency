@@ -16,7 +16,7 @@ from cerebras.cloud.sdk import (
 
 log = logging.getLogger(__name__)
 
-MODEL = "llama-3.3-70b"
+MODEL = "gpt-oss-120b"
 
 _client: Cerebras | None = None
 
