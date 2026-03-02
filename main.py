@@ -12,10 +12,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 import database as db
 import qualifier
 import builder
-from scrapers import (
-    upwork_scraper, google_scraper, weworkremotely_scraper,
-    freelancer_scraper, twitter_scraper, linkedin_scraper,
-)
+from scrapers import upwork_scraper, google_scraper
 
 logging.basicConfig(
     level=logging.INFO,
@@ -92,34 +89,6 @@ def run_scan():
         total += n
     except Exception as e:
         log.error(f"Google scraper error: {e}")
-
-    try:
-        n = weworkremotely_scraper.scrape(keywords)
-        log.info(f"WeWorkRemotely: +{n} leads")
-        total += n
-    except Exception as e:
-        log.error(f"WeWorkRemotely scraper error: {e}")
-
-    try:
-        n = freelancer_scraper.scrape(keywords)
-        log.info(f"Freelancer: +{n} leads")
-        total += n
-    except Exception as e:
-        log.error(f"Freelancer scraper error: {e}")
-
-    try:
-        n = twitter_scraper.scrape(keywords)
-        log.info(f"Twitter: +{n} leads")
-        total += n
-    except Exception as e:
-        log.error(f"Twitter scraper error: {e}")
-
-    try:
-        n = linkedin_scraper.scrape(keywords)
-        log.info(f"LinkedIn: +{n} leads")
-        total += n
-    except Exception as e:
-        log.error(f"LinkedIn scraper error: {e}")
 
     log.info(f"Scan complete — {total} new leads saved")
     return total
