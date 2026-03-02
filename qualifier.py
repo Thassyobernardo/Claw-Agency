@@ -1,24 +1,13 @@
-import os
 import json
 import logging
-from groq import Groq, BadRequestError, APIStatusError, APIConnectionError
+from ai_utils import (
+    MODEL, get_client, call_with_retry,
+    BadRequestError, APIStatusError, APIConnectionError,
+)
 
 import database as db
 
 log = logging.getLogger(__name__)
-
-MODEL = "llama-3.3-70b-versatile"
-_client = None
-
-
-def _get_client() -> Groq:
-    global _client
-    if _client is None:
-        api_key = os.getenv("GROQ_API_KEY")
-        if not api_key:
-            raise RuntimeError("GROQ_API_KEY is not set. Add it to your .env file.")
-        _client = Groq(api_key=api_key)
-    return _client
 
 
 QUALIFICATION_PROMPT = """You are a senior automation consultant evaluating a client lead for a freelance agency.
@@ -51,35 +40,35 @@ Confidence scoring:
 
 def qualify_lead(source: str, title: str, description: str) -> dict:
     try:
-        resp = _get_client().chat.completions.create(
+        resp = call_with_retry(lambda: get_client().chat.completions.create(
             model=MODEL,
             messages=[{
                 "role": "user",
                 "content": QUALIFICATION_PROMPT.format(
                     source=source,
                     title=title,
-                    description=description[:3000]
-                )
+                    description=description[:3000],
+                ),
             }],
             temperature=0.3,
             max_tokens=768,
-        )
+        ))
         raw = resp.choices[0].message.content.strip()
         return json.loads(raw)
     except BadRequestError as e:
-        log.error("Groq 400 BadRequest in qualify_lead — status=%s message=%r body=%s",
+        log.error("Cerebras 400 in qualify_lead — status=%s message=%r body=%s",
                   e.status_code, e.message, e.body)
-        return {"error": f"Groq 400: {e.message}", "confidence": 0}
+        return {"error": f"Cerebras 400: {e.message}", "confidence": 0}
     except APIStatusError as e:
-        log.error("Groq API error in qualify_lead — status=%s message=%r body=%s",
+        log.error("Cerebras API error in qualify_lead — status=%s message=%r body=%s",
                   e.status_code, e.message, e.body)
-        return {"error": f"Groq {e.status_code}: {e.message}", "confidence": 0}
+        return {"error": f"Cerebras {e.status_code}: {e.message}", "confidence": 0}
     except APIConnectionError as e:
-        log.error("Groq connection error in qualify_lead: %s", e)
-        return {"error": f"Groq connection error: {e}", "confidence": 0}
+        log.error("Cerebras connection error in qualify_lead: %s", e)
+        return {"error": f"Cerebras connection error: {e}", "confidence": 0}
     except json.JSONDecodeError as e:
-        log.error("Groq returned non-JSON in qualify_lead: %s", e)
-        return {"error": "Groq response was not valid JSON", "confidence": 0}
+        log.error("Cerebras returned non-JSON in qualify_lead: %s", e)
+        return {"error": "Cerebras response was not valid JSON", "confidence": 0}
     except Exception as e:
         log.error("Unexpected error in qualify_lead: %s", e, exc_info=True)
         return {"error": str(e), "confidence": 0}

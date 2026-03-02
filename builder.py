@@ -3,26 +3,16 @@ import re
 import json
 import logging
 import zipfile
-from groq import Groq, BadRequestError, APIStatusError, APIConnectionError
+from ai_utils import (
+    MODEL, get_client, call_with_retry,
+    BadRequestError, APIStatusError, APIConnectionError,
+)
 
 import database as db
 
 log = logging.getLogger(__name__)
 
-MODEL = "llama-3.3-70b-versatile"
 BUILDS_DIR = os.path.abspath(os.getenv("BUILDS_DIR", "builds"))
-
-_client = None
-
-
-def _get_client() -> Groq:
-    global _client
-    if _client is None:
-        api_key = os.getenv("GROQ_API_KEY")
-        if not api_key:
-            raise RuntimeError("GROQ_API_KEY is not set. Add it to your .env file.")
-        _client = Groq(api_key=api_key)
-    return _client
 
 
 def _safe(s) -> str:
@@ -47,7 +37,7 @@ def _parse_json_field(value) -> dict:
 
 
 def _parse_files(raw: str) -> list[dict]:
-    """Extract the JSON file list from Groq's response."""
+    """Extract the JSON file list from Cerebras's response."""
     raw = raw.strip()
     # Strip markdown code fences if the model wrapped the output
     if raw.startswith("```"):
@@ -58,7 +48,7 @@ def _parse_files(raw: str) -> list[dict]:
     start = raw.find("[")
     end = raw.rfind("]")
     if start == -1 or end == -1:
-        raise ValueError("No JSON array found in Groq response")
+        raise ValueError("No JSON array found in Cerebras response")
     return json.loads(raw[start : end + 1])
 
 
@@ -112,21 +102,20 @@ Example (abbreviated):
 ]"""
 
 
-# ── Core functions ─────────────────────────────────────────────────────────────
+# ── Core functions ────────────────────────────────────────────────────────────
 
 def generate_project(lead: dict, qual: dict, proposal: dict, analysis: dict) -> list[dict]:
-    """Call Groq to generate project files. Returns list of {name, content}."""
-    # Build tech hints from multiple sources
+    """Call Cerebras to generate project files. Returns list of {name, content}."""
     tech_hints = ", ".join(analysis.get("tech_hints", []))
     if not tech_hints:
         tech_hints = proposal.get("tech_stack", "")
     if not tech_hints:
         tech_hints = "Python, requests, python-dotenv"
 
-    problem_summary = qual.get("problem_summary") or lead["title"]
+    problem_summary    = qual.get("problem_summary") or lead["title"]
     automation_solution = qual.get("automation_solution") or (lead.get("description") or "")[:500]
-    estimated_hours = qual.get("estimated_hours", "unknown")
-    description = (lead.get("description") or "")[:2000]
+    estimated_hours    = qual.get("estimated_hours", "unknown")
+    description        = (lead.get("description") or "")[:2000]
 
     prompt = BUILD_PROMPT.format(
         problem_summary=_safe(problem_summary),
@@ -140,32 +129,31 @@ def generate_project(lead: dict, qual: dict, proposal: dict, analysis: dict) -> 
 
     raw = ""
     try:
-        resp = _get_client().chat.completions.create(
+        resp = call_with_retry(lambda: get_client().chat.completions.create(
             model=MODEL,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.2,
             max_tokens=8192,
-        )
+        ))
         raw = resp.choices[0].message.content.strip()
         files = _parse_files(raw)
-        # Filter out entries with empty names or content
         files = [f for f in files if f.get("name") and f.get("content")]
-        log.info("Groq generated %d files for lead %d", len(files), lead["id"])
+        log.info("Cerebras generated %d files for lead %d", len(files), lead["id"])
         return files
     except BadRequestError as e:
-        log.error("Groq 400 in generate_project — status=%s body=%s", e.status_code, e.body)
+        log.error("Cerebras 400 in generate_project — status=%s body=%s", e.status_code, e.body)
         raise
     except APIStatusError as e:
-        log.error("Groq API error in generate_project — status=%s message=%r", e.status_code, e.message)
+        log.error("Cerebras API error in generate_project — status=%s message=%r", e.status_code, e.message)
         raise
     except APIConnectionError as e:
-        log.error("Groq connection error in generate_project: %s", e)
+        log.error("Cerebras connection error in generate_project: %s", e)
         raise
     except json.JSONDecodeError as e:
-        log.error("Groq returned non-JSON in generate_project: %s | Raw (first 500 chars): %.500s", e, raw)
-        raise RuntimeError(f"Groq response was not valid JSON: {e}") from e
+        log.error("Cerebras returned non-JSON: %s | Raw (first 500): %.500s", e, raw)
+        raise RuntimeError(f"Cerebras response was not valid JSON: {e}") from e
     except ValueError as e:
-        log.error("Could not locate JSON array in Groq response: %s | Raw (first 500): %.500s", e, raw)
+        log.error("Could not locate JSON array in Cerebras response: %s | Raw (first 500): %.500s", e, raw)
         raise RuntimeError(str(e)) from e
 
 
@@ -186,7 +174,7 @@ def build_lead(lead_id: int) -> str:
 
     files = generate_project(lead, qual, proposal, analysis)
     if not files:
-        raise RuntimeError("Groq returned an empty file list")
+        raise RuntimeError("Cerebras returned an empty file list")
 
     os.makedirs(BUILDS_DIR, exist_ok=True)
     slug = _slug(lead["title"], lead_id)
