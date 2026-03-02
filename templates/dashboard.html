@@ -296,6 +296,7 @@
     .status-skipped   { background: rgba(100,116,139,.15); color: var(--muted); }
     .status-qualified { background: rgba(34,197,94,.2);    color: var(--green); }
     .status-skip      { background: rgba(239,68,68,.15);   color: #fca5a5; }
+    .status-built     { background: rgba(168,85,247,.2);   color: #d8b4fe; }
 
     .title-cell { max-width: 320px; }
     .title-cell .title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1055,9 +1056,18 @@ function renderModal(lead) {
     </button>
   `).join('');
 
+  const buildBtn     = lead.status === 'qualified'
+    ? `<button class="btn btn-primary btn-sm" id="buildBtn" onclick="buildLead(${lead.id})">🔨 Build</button>`
+    : '';
+  const downloadBtn  = lead.status === 'built' && lead.deliverable_path
+    ? `<a class="btn btn-ghost btn-sm" href="/api/leads/${lead.id}/download">⬇️ Download</a>`
+    : '';
+
   document.getElementById('modalFooter').innerHTML = `
     <div class="status-actions">${statusBtns}</div>
     <button class="btn btn-ghost btn-sm" style="margin-left:auto;" onclick="qualifyLead(${lead.id})">🎯 Qualify</button>
+    ${buildBtn}
+    ${downloadBtn}
     <button class="btn btn-ghost btn-sm" onclick="copyAll(${lead.id})">📋 Copy Proposal</button>
   `;
 
@@ -1117,6 +1127,32 @@ async function qualifyLead(id) {
   } catch (e) {
     toast(`Error: ${e.message}`, 'error');
     if (btn) { btn.disabled = false; btn.textContent = 'Run Qualifier'; }
+  }
+}
+
+// ── Build lead ────────────────────────────────────────────────────
+async function buildLead(id) {
+  const btn = document.getElementById('buildBtn');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin">🔨</span> Building…'; }
+  toast('Building project — this may take up to 30 seconds…', 'success');
+  try {
+    const res = await fetch(`/api/leads/${id}/build`, { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      toast('Build complete! ZIP is ready.', 'success');
+      const res2 = await fetch(`/api/leads/${id}`);
+      const lead = await res2.json();
+      renderModal(lead);
+      // Trigger download automatically
+      setTimeout(() => { window.location.href = `/api/leads/${id}/download`; }, 400);
+      refreshStats();
+    } else {
+      toast(`Build error: ${data.error}`, 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = '🔨 Build'; }
+    }
+  } catch (e) {
+    toast(`Error: ${e.message}`, 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '🔨 Build'; }
   }
 }
 

@@ -43,7 +43,8 @@ def init_db():
                 keywords    TEXT,
                 analysis    TEXT,
                 proposal    TEXT,
-                qualification TEXT,
+                qualification     TEXT,
+                deliverable_path  TEXT,
                 status      TEXT NOT NULL DEFAULT 'new',
                 created_at  TEXT NOT NULL,
                 updated_at  TEXT NOT NULL
@@ -53,11 +54,15 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_leads_source  ON leads(source);
             CREATE INDEX IF NOT EXISTS idx_leads_created ON leads(created_at DESC);
         """)
-        # Add qualification column to existing databases that predate this schema
-        try:
-            conn.execute("ALTER TABLE leads ADD COLUMN qualification TEXT")
-        except Exception:
-            pass  # column already exists
+        # Migrate existing databases — add columns introduced after initial release
+        for col, definition in [
+            ("qualification",    "TEXT"),
+            ("deliverable_path", "TEXT"),
+        ]:
+            try:
+                conn.execute(f"ALTER TABLE leads ADD COLUMN {col} {definition}")
+            except Exception:
+                pass  # column already exists
 
 
 def upsert_lead(source: str, title: str, description: str,
@@ -100,8 +105,17 @@ def save_qualification(lead_id: int, qualification: str):
         )
 
 
+def save_deliverable_path(lead_id: int, path: str):
+    now = datetime.utcnow().isoformat()
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE leads SET deliverable_path=?, updated_at=? WHERE id=?",
+            (path, now, lead_id)
+        )
+
+
 def update_status(lead_id: int, status: str):
-    allowed = {"new", "sent", "won", "skipped", "qualified", "skip"}
+    allowed = {"new", "sent", "won", "skipped", "qualified", "skip", "built"}
     if status not in allowed:
         raise ValueError(f"Invalid status: {status}")
     now = datetime.utcnow().isoformat()

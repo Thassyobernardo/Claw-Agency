@@ -4,12 +4,13 @@ import logging
 from dotenv import load_dotenv
 load_dotenv()
 from datetime import datetime
-from flask import Flask, render_template, jsonify, request, abort
+from flask import Flask, render_template, jsonify, request, abort, send_file
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 import database as db
 import qualifier
+import builder
 from scrapers import upwork_scraper, google_scraper, twitter_scraper, linkedin_scraper
 
 logging.basicConfig(
@@ -176,6 +177,36 @@ def api_qualify_lead(lead_id):
     except Exception as e:
         log.error(f"Qualification failed for lead {lead_id}: {e}")
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/leads/<int:lead_id>/build", methods=["POST"])
+def api_build_lead(lead_id):
+    """Generate a production-ready code project and package it as a ZIP."""
+    try:
+        zip_path = builder.build_lead(lead_id)
+        return jsonify({"ok": True, "path": zip_path})
+    except ValueError as e:
+        abort(404, str(e))
+    except Exception as e:
+        log.error(f"Build failed for lead {lead_id}: {e}")
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/api/leads/<int:lead_id>/download")
+def api_download_lead(lead_id):
+    """Download the ZIP deliverable for a built lead."""
+    lead = db.get_lead(lead_id)
+    if not lead:
+        abort(404)
+    path = lead.get("deliverable_path")
+    if not path or not os.path.exists(path):
+        abort(404, "Build file not found. Run the builder first.")
+    return send_file(
+        path,
+        mimetype="application/zip",
+        as_attachment=True,
+        download_name=os.path.basename(path),
+    )
 
 
 @app.route("/health")
