@@ -12,7 +12,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 import database as db
 import qualifier
 import builder
-from scrapers import upwork_scraper
+from scrapers import apify_scraper
 
 logging.basicConfig(
     level=logging.INFO,
@@ -75,11 +75,18 @@ def run_scan():
     total = 0
 
     try:
-        n = upwork_scraper.scrape(keywords)
-        log.info(f"Upwork: +{n} leads")
+        n = apify_scraper.scrape_upwork(keywords)
+        log.info(f"Apify/Upwork: +{n} leads")
         total += n
     except Exception as e:
-        log.error(f"Upwork scraper error: {e}")
+        log.error(f"Apify/Upwork scraper error: {e}")
+
+    try:
+        n = apify_scraper.scrape_freelancer(keywords)
+        log.info(f"Apify/Freelancer: +{n} leads")
+        total += n
+    except Exception as e:
+        log.error(f"Apify/Freelancer scraper error: {e}")
 
     log.info(f"Scan complete — {total} new leads saved")
     return total
