@@ -32,6 +32,8 @@ CORE_KEYWORDS = [
     "whatsapp bot",
     "workflow",
     "ai agent",
+    "make.com",
+    "email automation",
 ]
 
 
