@@ -136,7 +136,7 @@ def save_deliverable_path(lead_id: int, path: str):
 
 
 def update_status(lead_id: int, status: str):
-    allowed = {"new", "sent", "won", "skipped", "qualified", "skip", "built"}
+    allowed = {"new", "sent", "won", "skipped", "qualified", "skip", "built", "paid", "delivered"}
     if status not in allowed:
         raise ValueError(f"Invalid status: {status}")
     now = datetime.utcnow().isoformat()
