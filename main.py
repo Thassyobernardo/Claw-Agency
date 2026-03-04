@@ -278,13 +278,16 @@ def start_scheduler():
     scheduler.start()
     log.info(f"Scheduler started — scanning every {interval_hours}h")
     
-    # Run the sales cycle once immediately on startup for testing
-    def delayed_sales_cycle():
-        log.info("Waiting 10 seconds before running initial sales cycle on startup...")
+    # Run the manager and sales cycles once on startup for testing
+    def delayed_startup_cycle():
+        log.info("Waiting 10 seconds before running initial startup cycles...")
         time.sleep(10)
+        log.info("Running manager cycle to build leads...")
+        manager_agent.run_manager_cycle()
+        log.info("Running sales cycle to dispatch emails...")
         sales_agent.run_sales_cycle()
 
-    threading.Thread(target=delayed_sales_cycle, daemon=True).start()
+    threading.Thread(target=delayed_startup_cycle, daemon=True).start()
     
     return scheduler
 
