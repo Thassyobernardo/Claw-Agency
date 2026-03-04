@@ -20,6 +20,9 @@ def run_sales_cycle() -> int:
     target_email = os.environ.get("TARGET_EMAIL")
     from_email = os.environ.get("RESEND_FROM_EMAIL", "onboarding@resend.dev")
 
+    print(f"DEBUG: API Key (first 5): {str(api_key)[:5]}...")
+    print(f"DEBUG: FROM Email (first 5): {str(from_email)[:5]}...")
+
     leads = db.get_leads(status="built")
     if not leads:
         log.info("No leads with 'built' status found.")
