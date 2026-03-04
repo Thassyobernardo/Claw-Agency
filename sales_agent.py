@@ -3,6 +3,7 @@ import json
 import logging
 import base64
 import resend
+import zipfile
 import database as db
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -57,18 +58,24 @@ def run_sales_cycle() -> int:
         except Exception:
             technical_solution = proposal_raw
 
+        payment_link = os.environ.get("PAYMENT_LINK", "https://your-payment-link.com/")
+
         try:
-            with open(deliverable_path, "rb") as f:
-                file_bytes = f.read()
-                # Use list of bytes for Resend Python SDK
-                file_content = list(file_bytes)
+            with zipfile.ZipFile(deliverable_path, 'r') as zf:
+                file_list = zf.namelist()
+                # Exclude root directory entries if they end with '/' to keep list clean
+                clean_list = [f for f in file_list if not f.endswith('/')]
+                # Render a tree-like/list output
+                features_sample = "\n".join(f"- {f}" for f in clean_list[:20])
+                if len(clean_list) > 20:
+                    features_sample += f"\n... and {len(clean_list) - 20} more items."
         except Exception as e:
-            log.error(f"Failed to read deliverable {deliverable_path}: {e}")
-            continue
+            log.error(f"Failed to read deliverable ZIP {deliverable_path}: {e}")
+            features_sample = "Project structure is ready but couldn't be previewed."
 
         html_body = f"""
         <html>
-        <body>
+        <body style="font-family: sans-serif; color: #333; line-height: 1.6;">
             <h2>Your Custom Project: {title}</h2>
             <p>Hi there,</p>
             <p>Based on your project description, we've developed a custom technical solution for you.</p>
@@ -79,10 +86,16 @@ def run_sales_cycle() -> int:
             <h3>Technical Solution</h3>
             <pre style="background: #f4f4f4; padding: 15px; border-radius: 5px; font-family: monospace;">{technical_solution}</pre>
             
-            <p>We've attached the fully functional code project as a ZIP file to this email.</p>
+            <h3>Project Sample / Expected Deliverables</h3>
+            <p>The original project has been successfully built and is securely stored on our servers. Here is a sample of the generated source code structure:</p>
+            <pre style="background: #f4f4f4; padding: 15px; border-radius: 5px; font-family: monospace;">{features_sample}</pre>
+            
+            <h3>Unlock the Full Code</h3>
+            <p>To automatically receive the full project ZIP file, please complete the payment using the link below:</p>
+            <p><a href="{payment_link}" style="display: inline-block; padding: 10px 20px; background-color: #007bff; color: white; text-decoration: none; border-radius: 5px;">Secure Your Code Now</a></p>
             
             <h3>Let's Schedule a Demo</h3>
-            <p>We'd love to invite you to a brief 15-minute demonstration call to walk you through the solution we built.</p>
+            <p>If you'd like to see it in action before purchasing, we'd love to invite you to a brief 15-minute demonstration call.</p>
             <p>Please reply to this email, and we'll schedule a time that works for you.</p>
             
             <p>Best regards,<br/>The Engineering Team</p>
@@ -96,12 +109,6 @@ def run_sales_cycle() -> int:
                 "to": [target_email],
                 "subject": f"Your automated solution is ready: {title}",
                 "html": html_body,
-                "attachments": [
-                    {
-                        "filename": os.path.basename(deliverable_path),
-                        "content": file_content
-                    }
-                ]
             }
             
             response = resend.Emails.send(params)
