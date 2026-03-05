@@ -8,35 +8,69 @@ import database as db
 
 log = logging.getLogger(__name__)
 
-# Templates for different sequence stages
+# Premium English Templates with Storytelling & PAS Framework
+# Skill: copywriting, sales-psychology
 STAGES = {
     0: {
-        "subject": "Ready: Automation Prototype for {title}",
+        "subject": "Prototype Ready: {title}",
         "template": """
         <html>
-        <body style="font-family: sans-serif; padding: 20px;">
-            <h2>Seu Protótipo Personalizado</h2>
-            <p>Olá! Desenvolvemos uma automação sob medida para: <b>{title}</b>.</p>
-            <p>{hook}</p>
-            <p>{agitation}</p>
-            <p><b>Solução:</b> {solution}</p>
-            <p>O código e instruções estão anexados. Para suporte e versão final:</p>
-            <a href="{payment_url}" style="padding: 10px; background: #007bff; color: #fff; text-decoration: none;">Liberar Acesso</a>
-            <p>{cta}</p>
+        <body style="font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8f9fa; padding: 40px; color: #212529; line-height: 1.6;">
+            <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #e9ecef;">
+                <div style="background: #0052cc; padding: 30px; text-align: center; color: white;">
+                    <h1 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: 0.5px;">Custom Automation Prototype</h1>
+                    <p style="margin: 5px 0 0; opacity: 0.9; font-size: 14px;">Engineered for: {title}</p>
+                </div>
+                <div style="padding: 40px;">
+                    <p style="font-size: 17px; font-weight: 500; color: #0052cc; margin-bottom: 20px;">{hook}</p>
+                    
+                    <p style="margin-bottom: 25px;">
+                        Following our analysis of your requirements, we identified a critical bottleneck that could be significantly optimized.
+                        <strong>{agitation}</strong>
+                    </p>
+
+                    <div style="background: #f0f7ff; border-left: 4px solid #0052cc; padding: 25px; margin-bottom: 30px; border-radius: 0 8px 8px 0;">
+                        <h3 style="margin: 0 0 10px; font-size: 15px; color: #0052cc; text-transform: uppercase; letter-spacing: 1px;">The Engineered Solution</h3>
+                        <p style="margin: 0; font-size: 16px; color: #444;">{solution}</p>
+                    </div>
+
+                    <p style="font-size: 15px; color: #666; margin-bottom: 35px;">
+                        A fully functional source code and setup instructions are attached to this email. 
+                        You can deploy this as a proof-of-concept today. For the production-ready build and full technical support, 
+                        please initialize the access below.
+                    </p>
+
+                    <div style="text-align: center; margin-bottom: 40px;">
+                        <a href="{payment_url}" style="background-color: #0052cc; color: white; padding: 18px 36px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px; display: inline-block; transition: all 0.3s ease;">
+                            Unlock Production Version
+                        </a>
+                        <p style="margin-top: 12px; font-size: 12px; color: #adb5bd;">Secure checkout via Stripe</p>
+                    </div>
+
+                    <div style="border-top: 1px solid #eee; padding-top: 30px; font-size: 14px; color: #495057;">
+                        <p style="font-style: italic; margin-bottom: 0;">{cta}</p>
+                    </div>
+                </div>
+                <div style="background: #f8f9fa; padding: 20px; text-align: center; font-size: 11px; color: #6c757d; border-top: 1px solid #eee;">
+                    Claw Agency | Engineering & Automation Department
+                </div>
+            </div>
         </body>
         </html>
         """
     },
     1: {
-        "subject": "Follow-up: {title} Automation",
+        "subject": "Follow-up: Solving {title}",
         "template": """
         <html>
-        <body style="font-family: sans-serif; padding: 20px;">
-            <h2>Alguma dúvida sobre o protótipo?</h2>
-            <p>Olá! Notei que você ainda não acessou a versão final da automação para <b>{title}</b>.</p>
-            <p>O motor que construímos resolve exatamente o gap de {pain}.</p>
-            <p>Gostaria de agendar uma call técnica de 5 minutos?</p>
-            <a href="{payment_url}">Link para Acesso Vitalício</a>
+        <body style="font-family: sans-serif; padding: 30px; color: #333; line-height: 1.5;">
+            <p style="font-size: 16px;">Hi there,</p>
+            <p>I noticed you haven't moved forward with the production build for the <strong>{title}</strong> automation yet.</p>
+            <p>Based on our deep dive into the <em>{pain}</em> issue, delaying this automation usually leads to compound technical debt or wasted operational hours.</p>
+            <p>Would you be open to a 2-minute sync to see how we can bridge the gap between the prototype and your final goal?</p>
+            <p><a href="{payment_url}" style="color: #0052cc; font-weight: bold;">Access Production Build & Support here</a></p>
+            <br>
+            <p>Best regards,<br>Engineering Team @ Claw Agency</p>
         </body>
         </html>
         """
@@ -57,18 +91,27 @@ def run_sales_cycle() -> int:
     for lead in new_leads:
         try:
             proposal = json.loads(lead.get("proposal") or "{}")
+            # Fallback if PAS fields are missing (for old leads)
+            hook = proposal.get("hook") or proposal.get("hook_en") or "I've engineered a solution for your technical challenge."
+            agitation = proposal.get("pas_agitation") or "Manual processing scales poorly and invites human error."
+            solution = proposal.get("pas_solution") or proposal.get("solution") or "A custom automated engine designed to handle your specific workload efficiently."
+            cta = proposal.get("call_to_action") or "Ready to discuss implementation?"
+
             body = STAGES[0]["template"].format(
                 title=lead["title"],
-                hook=proposal.get("hook", ""),
-                agitation=proposal.get("pas_agitation", ""),
-                solution=proposal.get("pas_solution", ""),
+                hook=hook,
+                agitation=agitation,
+                solution=solution,
                 payment_url=payment_link,
-                cta=proposal.get("call_to_action", "")
+                cta=cta
             )
             
             attachments = []
             if lead.get("deliverable_path") and os.path.exists(lead["deliverable_path"]):
-                attachments.append({"filename": os.path.basename(lead["deliverable_path"]), "path": lead["deliverable_path"]})
+                attachments.append({
+                    "filename": os.path.basename(lead["deliverable_path"]), 
+                    "path": lead["deliverable_path"]
+                })
 
             resend.Emails.send({
                 "from": from_email,
@@ -80,18 +123,22 @@ def run_sales_cycle() -> int:
             db.update_status(lead["id"], "sent")
             db.update_sequence_stage(lead["id"], 1)
             sent_count += 1
-            log.info(f"Sales: Sent Stage 0 for lead {lead['id']}")
+            log.info(f"Sales: Sent professional Stage 0 for lead {lead['id']}")
         except Exception as e:
             log.error(f"Sales Stage 0 Error: {e}")
 
     # 2. Follow-ups (Stage 1 -> 2)
-    followups = db.get_followup_leads(days_since=1) # Reduced to 1 day for testing
+    followups = db.get_followup_leads(days_since=1)
     for lead in followups:
         try:
             analysis = json.loads(lead.get("analysis") or "{}")
+            pain = "operational efficiency"
+            if analysis.get("pain_points") and isinstance(analysis["pain_points"], list):
+                pain = analysis["pain_points"][0]
+
             body = STAGES[1]["template"].format(
                 title=lead["title"],
-                pain=analysis.get("pain_points", ["trabalho manual"])[0],
+                pain=pain,
                 payment_url=payment_link
             )
             resend.Emails.send({
@@ -102,7 +149,7 @@ def run_sales_cycle() -> int:
             })
             db.update_sequence_stage(lead["id"], 2)
             sent_count += 1
-            log.info(f"Sales: Sent Stage 1 follow-up for lead {lead['id']}")
+            log.info(f"Sales: Sent professional Stage 1 follow-up for lead {lead['id']}")
         except Exception as e:
             log.error(f"Sales Stage 1 Error: {e}")
 

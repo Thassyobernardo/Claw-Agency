@@ -33,14 +33,14 @@ Analysis: {analysis}
 
 Respond with ONLY this JSON:
 {{
-  "hook": "1 sentence showing you've READ their specific problem",
-  "pas_agitation": "1-2 sentences highlighting the cost of NOT fixing the problem",
-  "pas_solution": "2 sentences on how your approach solves it specifically",
+  "hook": "1 sentence showing you've READ their specific problem with senior precision",
+  "pas_agitation": "1-2 sentences highlighting the business/technical cost of NOT fixing the problem (The Story of the Pain)",
+  "pas_solution": "2-3 sentences of storytelling on HOW your tailored engine solves this specifically (The Path to Resolution)",
   "tech_stack": "comma-separated tech",
-  "call_to_action": "An open, low-friction question"
+  "call_to_action": "An open, low-friction question to start a technical conversation"
 }}
 
-Tone: Bold, Human, Direct. No fluff."""
+Tone: Professional, Bold, Strategic. No fluff. 100% English."""
 
 def analyze_lead(source: str, title: str, description: str) -> dict:
     try:
