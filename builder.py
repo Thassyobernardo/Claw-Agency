@@ -185,23 +185,27 @@ def build_lead(lead_id: int) -> str:
             archive_path = f"{slug}/{f['name'].lstrip('/')}"
             zf.writestr(archive_path, f["content"])
             
-        # Add the INICIAR.bat file
+        # Add the START_HERE.bat file
         bat_content = (
             "@echo off\n"
             "echo =========================================\n"
             "echo      Iniciando seu Motor de Automacao     \n"
             "echo =========================================\n"
             "echo.\n"
-            "echo 1. Instalando dependencias (Python)...\n"
-            "pip install -r requirements.txt\n"
-            "echo.\n"
-            "echo 2. Executando o sistema principal...\n"
-            "python main.py\n"
+            "echo Verificando instalacao do Python...\n"
+            "python --version >nul 2>&1\n"
+            "if %errorlevel% neq 0 (\n"
+            "    echo [ERRO] Python nao encontrado. Por favor, instale o Python em python.org.\n"
+            "    pause\n"
+            "    exit /b\n"
+            ")\n"
+            "echo Instalando dependencias e iniciando sistema...\n"
+            "pip install -r requirements.txt && python main.py\n"
             "pause\n"
         )
-        zf.writestr(f"{slug}/INICIAR.bat", bat_content)
+        zf.writestr(f"{slug}/START_HERE.bat", bat_content)
 
-    log.info("Packaged %d files (+ INICIAR.bat) → %s", len(files), zip_path)
+    log.info("Packaged %d files (+ START_HERE.bat) → %s", len(files), zip_path)
 
     db.save_deliverable_path(lead_id, zip_path)
     db.update_status(lead_id, "built")
