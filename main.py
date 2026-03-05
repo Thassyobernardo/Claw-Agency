@@ -1,298 +1,125 @@
 import os
 import json
 import logging
-from dotenv import load_dotenv
-load_dotenv()
+import asyncio
 from datetime import datetime
-import time
-import threading
-from flask import Flask, render_template, jsonify, request, abort, send_file
-from werkzeug.exceptions import HTTPException
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
+from typing import List, Optional
+
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, Depends
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from dotenv import load_dotenv
+
+# Load env before other imports
+load_dotenv()
 
 import database as db
-import qualifier
-import builder
-from scrapers import upwork_scraper
-import sales_agent
-import manager_agent
-import support_agent
 import orchestrator
+import schemas
 
+# Setup logging
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+    format="%(asctime)s [%(levelname)s] (%(name)s) %(message)s",
 )
-log = logging.getLogger(__name__)
+log = logging.getLogger("ClawAPI")
 
-app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "hunter-agent-secret")
+app = FastAPI(
+    title="Claw Agency API",
+    description="Autonomous Multi-Agent Lead Generation System",
+    version="2.0.0"
+)
 
-# Initialise the DB schema on the first non-health request so Flask can
-# bind and respond to /health immediately without waiting for PostgreSQL.
-@app.before_request
-def ensure_db():
-    if request.path == "/health":
-        return
-    try:
-        db.init_db()
-    except Exception as e:
-        log.error(f"Database unavailable: {e}")
-        return jsonify({"error": "Database unavailable", "detail": str(e)}), 503
-
-
-@app.errorhandler(Exception)
-def handle_exception(e):
-    if isinstance(e, HTTPException):
-        return jsonify({"error": e.description}), e.code
-    log.error("Unhandled exception", exc_info=True)
-    return jsonify({"error": "Internal server error", "detail": str(e)}), 500
-
-# Jinja2 filter: parse JSON strings in templates
-@app.template_filter("fromjson")
-def fromjson_filter(value):
-    if not value:
-        return {}
-    try:
-        return json.loads(value)
-    except Exception:
-        return {}
-
-# ── Config ────────────────────────────────────────────────────────────────────
-
-def get_keywords() -> list[str]:
-    raw = os.getenv(
-        "KEYWORDS",
-        "automation,chatbot,zapier,n8n,crm,whatsapp bot,workflow,ai agent",
-    )
-    return [k.strip() for k in raw.split(",") if k.strip()]
-
-
-def get_scan_interval() -> int:
-    return int(os.getenv("SCAN_INTERVAL_HOURS", "3"))
-
-
-# ── Scan job ─────────────────────────────────────────────────────────────────
-
-def run_scan():
-    keywords = get_keywords()
-    log.info(f"Starting scan — keywords: {keywords}")
-    total = 0
-
-    try:
-        n = upwork_scraper.scrape(keywords)
-        log.info(f"Upwork: +{n} leads")
-        total += n
-    except Exception as e:
-        log.error(f"Upwork scraper error: {e}")
-
-    log.info(f"Scan complete — {total} new leads saved")
-    return total
-
-
-# ── Flask routes ──────────────────────────────────────────────────────────────
-
-@app.route("/")
-@app.route("/dashboard")
-def dashboard():
-    try:
-        stats = db.get_stats()
-        leads = db.get_leads(limit=50)
-    except Exception as e:
-        log.error(f"Dashboard DB error: {e}")
-        return jsonify({"error": "Database error", "detail": str(e)}), 500
-    return render_template(
-        "dashboard.html",
-        stats=stats,
-        leads=leads,
-        keywords=get_keywords(),
-        scan_interval=get_scan_interval(),
-    )
-
-
-@app.route("/api/leads")
-def api_leads():
-    try:
-        status = request.args.get("status")
-        source = request.args.get("source")
-        limit = min(int(request.args.get("limit", 100)), 500)
-        offset = int(request.args.get("offset", 0))
-        leads = db.get_leads(status=status, source=source, limit=limit, offset=offset)
-        return jsonify(leads)
-    except Exception as e:
-        log.error(f"api_leads error: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/leads/<int:lead_id>")
-def api_lead(lead_id):
-    try:
-        lead = db.get_lead(lead_id)
-    except Exception as e:
-        log.error(f"api_lead DB error: {e}")
-        return jsonify({"error": str(e)}), 500
-    if not lead:
-        abort(404)
-
-    # Parse JSON fields for nicer output
-    for field in ("analysis", "proposal", "qualification"):
-        if lead.get(field):
-            try:
-                lead[field] = json.loads(lead[field])
-            except Exception:
-                pass
-
-    return jsonify(lead)
-
-
-@app.route("/api/leads/<int:lead_id>/status", methods=["PATCH"])
-def api_update_status(lead_id):
-    data = request.get_json(force=True)
-    status = data.get("status")
-    if not status:
-        abort(400, "Missing status")
-    try:
-        db.update_status(lead_id, status)
-    except ValueError as e:
-        abort(400, str(e))
-    return jsonify({"ok": True, "id": lead_id, "status": status})
-
-
-@app.route("/api/stats")
-def api_stats():
-    try:
-        return jsonify(db.get_stats())
-    except Exception as e:
-        log.error(f"api_stats error: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@app.route("/api/scan", methods=["POST"])
-def api_scan():
-    """Trigger a manual scan."""
-    log.info("Manual scan triggered via API")
-    try:
-        total = run_scan()
-        return jsonify({"ok": True, "new_leads": total})
-    except Exception as e:
-        log.error(f"Manual scan failed: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/api/qualify", methods=["POST"])
-def api_qualify():
-    """Qualify all leads with status 'new'."""
-    log.info("Bulk qualification triggered via API")
-    try:
-        count = qualifier.run_qualification()
-        return jsonify({"ok": True, "qualified": count})
-    except Exception as e:
-        log.error(f"Bulk qualification failed: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/api/leads/<int:lead_id>/qualify", methods=["POST"])
-def api_qualify_lead(lead_id):
-    """Qualify a single lead by ID."""
-    try:
-        result = qualifier.qualify_single(lead_id)
-        return jsonify({"ok": True, "qualification": result})
-    except ValueError as e:
-        abort(404, str(e))
-    except Exception as e:
-        log.error(f"Qualification failed for lead {lead_id}: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/api/leads/<int:lead_id>/build", methods=["POST"])
-def api_build_lead(lead_id):
-    """Generate a production-ready code project and package it as a ZIP."""
-    try:
-        zip_path = builder.build_lead(lead_id)
-        return jsonify({"ok": True, "path": zip_path})
-    except ValueError as e:
-        abort(404, str(e))
-    except Exception as e:
-        log.error(f"Build failed for lead {lead_id}: {e}")
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-
-@app.route("/api/leads/<int:lead_id>/download")
-def api_download_lead(lead_id):
-    """Download the ZIP deliverable for a built lead."""
-    try:
-        lead = db.get_lead(lead_id)
-    except Exception as e:
-        log.error(f"api_download_lead DB error: {e}")
-        return jsonify({"error": str(e)}), 500
-    if not lead:
-        abort(404)
-    path = lead.get("deliverable_path")
-    if not path or not os.path.exists(path):
-        abort(404, "Build file not found. Run the builder first.")
-    return send_file(
-        path,
-        mimetype="application/zip",
-        as_attachment=True,
-        download_name=os.path.basename(path),
-    )
-
-
-@app.route("/health")
-def health():
-    return jsonify({"status": "ok", "time": datetime.utcnow().isoformat()})
-
-
-# ── Startup ───────────────────────────────────────────────────────────────────
-
-def start_scheduler():
-    interval_hours = get_scan_interval()
-    scheduler = BackgroundScheduler(daemon=True)
- 
-    # Unified Orchestrator: Runs the full agency cycle (Scan -> Manage -> Sell -> Support)
-    scheduler.add_job(
-        orchestrator.run_full_agency_cycle,
-        trigger=IntervalTrigger(hours=interval_hours),
-        id="agency_cycle",
-        replace_existing=True,
-        coalesce=True,
-    )
- 
-    scheduler.start()
-    log.info(f"Scheduler started — full agency cycle every {interval_hours}h")
- 
-    # Initial startup cycle
-    def startup_cycle():
-        log.info("Waiting 10 seconds before running initial orchestrator cycle...")
-        time.sleep(10)
-        log.info("Running initial multi-agent cycle via LangGraph...")
-        # Reset skipped leads first to catch them in this cycle
-        try:
-            import reset_skipped
-            reset_skipped.reset_skipped_leads()
-        except Exception as e:
-            log.warning(f"Could not reset skipped leads: {e}")
-            
-        orchestrator.run_full_agency_cycle()
-
-    threading.Thread(target=startup_cycle, daemon=True).start()
- 
-    return scheduler
-
-
-# Attempt DB init at startup so tables exist before the first request.
-# If the DB isn't reachable yet, before_request will retry on each request.
-try:
+# --- Startup ---
+@app.on_event("startup")
+async def startup_event():
     db.init_db()
-    log.info("Database initialised at startup")
-except Exception as e:
-    log.warning(f"Database not reachable at startup (will retry): {e}")
+    log.info("Database initialized and FastAPI started.")
+    
+    # Run the startup orchestrator cycle in the background
+    asyncio.create_task(run_startup_cycle())
 
-# Start the scheduler; the first scan fires after SCAN_INTERVAL_HOURS.
-_scheduler = start_scheduler()
+async def run_startup_cycle():
+    """Initial cycle with a delay to allow deployment stabilization."""
+    log.info("Startup: Orchestrator will run in 10 seconds...")
+    await asyncio.sleep(10)
+    try:
+        # Reset leads (optional, could be move to a task)
+        import reset_skipped
+        reset_skipped.reset_skipped_leads()
+        
+        log.info("Startup: Running initial multi-agent cycle...")
+        orchestrator.run_full_agency_cycle()
+    except Exception as e:
+        log.error(f"Startup cycle failed: {e}")
 
+# --- API Routes ---
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+
+@app.get("/api/stats", response_model=schemas.StatsResponse)
+async def get_stats():
+    return db.get_stats()
+
+@app.get("/api/leads", response_model=List[schemas.LeadResponse])
+async def get_leads(
+    status: Optional[str] = None, 
+    source: Optional[str] = None, 
+    limit: int = 50, 
+    offset: int = 0
+):
+    return db.get_leads(status=status, source=source, limit=limit, offset=offset)
+
+@app.get("/api/leads/{lead_id}", response_model=schemas.LeadResponse)
+async def get_lead(lead_id: int):
+    lead = db.get_lead(lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    return lead
+
+@app.patch("/api/leads/{lead_id}/status")
+async def update_lead_status(lead_id: int, req: schemas.UpdateStatusRequest):
+    try:
+        db.update_status(lead_id, req.status)
+        return {"ok": True, "lead_id": lead_id, "status": req.status}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/scan")
+async def trigger_scan(background_tasks: BackgroundTasks):
+    """Manually trigger the LangGraph orchestration cycle."""
+    background_tasks.add_task(orchestrator.run_full_agency_cycle)
+    return {"ok": True, "message": "Agency cycle triggered in background."}
+
+@app.get("/api/leads/{lead_id}/download")
+async def download_lead(lead_id: int):
+    lead = db.get_lead(lead_id)
+    if not lead or not lead.get("deliverable_path"):
+        raise HTTPException(status_code=404, detail="Deliverable not found")
+    
+    path = lead["deliverable_path"]
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File missing on disk")
+        
+    return FileResponse(
+        path, 
+        media_type="application/zip", 
+        filename=os.path.basename(path)
+    )
+
+# --- Legacy Dashboard Support ---
+# For now, we keep the dashboard as static or simple HTML if needed.
+# Since the user still wants the dashboard, we serve it via FastAPI.
+# Note: This might require moving templates/ to a folder FastAPI can see.
+
+@app.get("/", include_in_schema=False)
+async def root():
+    return {"message": "Claw Agency API is running. Visit /docs for documentation."}
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    import uvicorn
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
