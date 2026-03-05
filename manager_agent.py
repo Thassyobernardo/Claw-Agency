@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import logging
 import resend
 
@@ -49,8 +50,8 @@ def run_manager_cycle() -> dict:
             analysis_data = json.loads(analysis_str)
             urgency = str(analysis_data.get("urgency", "low")).lower()
 
-            if urgency == "high":
-                log.info(f"Manager Agent: Lead {lead_id} has HIGH urgency. Qualifying and building.")
+            if urgency in ("high", "medium"):
+                log.info(f"Manager Agent: Lead {lead_id} has {urgency.upper()} urgency. Qualifying and building.")
                 db.update_status(lead_id, "qualified")
                 qualified_count += 1
                 
@@ -64,6 +65,9 @@ def run_manager_cycle() -> dict:
         except Exception as e:
             log.error(f"Manager Agent: Error processing lead {lead_id}: {e}")
 
+        # Delay between leads to avoid Groq 429 rate limit
+        time.sleep(3)
+
     # 3. Send Summary email
     if api_key and target_email:
         try:
@@ -75,7 +79,7 @@ def run_manager_cycle() -> dict:
                 <p>The Manager Agent has completed its cycle.</p>
                 <ul>
                     <li>Leads Processed: <b>{processed_count}</b></li>
-                    <li>High Urgency Leads Qualified: <b>{qualified_count}</b></li>
+                    <li>Qualified Leads (High + Medium): <b>{qualified_count}</b></li>
                     <li>Projects Successfully Built: <b>{built_count}</b></li>
                 </ul>
                 <p>The Sales Agent will take over the built leads in its next cycle.</p>
