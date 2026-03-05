@@ -36,14 +36,14 @@ def _get_client() -> ApifyClient:
     log.info(f"[Upwork] APIFY_TOKEN (first 8): {str(token)[:8]}...")
     if not token:
         raise RuntimeError("APIFY_TOKEN is not set.")
-    return ApifyClient(token)
+    return ApifyClient(token, timeout_secs=300)
 
 
 def _fetch_jobs(client: ApifyClient, keyword: str, max_jobs: int = 5) -> list[dict]:
     try:
         run_input = {"query": [keyword], "maxJobs": max_jobs}
         log.info(f"[Upwork] Starting actor run for '{keyword}' with input: {run_input}")
-        run = client.actor(ACTOR).call(run_input=run_input, timeout_secs=120)
+        run = client.actor(ACTOR).call(run_input=run_input, timeout_secs=300)
         items = client.dataset(run["defaultDatasetId"]).list_items().items
         return items if isinstance(items, list) else []
     except Exception as e:
