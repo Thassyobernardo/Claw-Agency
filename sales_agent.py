@@ -23,10 +23,10 @@ def run_sales_cycle() -> int:
     print(f"DEBUG: API Key (first 5): {str(api_key)[:5]}...")
     print(f"DEBUG: FROM Email (first 5): {str(from_email)[:5]}...")
 
-    # Rate limiting: max 5 emails per day
+    # Rate limiting: max 10 emails per day (temporary for testing)
     sent_today = db.count_recently_sent_leads(hours=24)
-    if sent_today >= 5:
-        log.info("[INFO] Daily limit of 5 leads reached. Resting until tomorrow.")
+    if sent_today >= 10:
+        log.info("[INFO] Daily limit of 10 leads reached. Resting until tomorrow.")
         return 0
 
     leads = db.get_leads(status="built")
