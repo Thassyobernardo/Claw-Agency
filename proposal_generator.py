@@ -4,54 +4,43 @@ from ai_utils import (
     MODEL, get_client, call_with_retry,
     BadRequestError, APIStatusError, APIConnectionError,
 )
+import time
 
 log = logging.getLogger(__name__)
 
-
-ANALYSIS_PROMPT = """You are a senior software consultant analyzing a potential client lead.
-
-Lead Source: {source}
+ANALYSIS_PROMPT = """Analyze this client lead with senior consultant precision.
+Source: {source}
 Title: {title}
 Description: {description}
 
-Analyze this lead and respond with ONLY a valid JSON object (no markdown, no extra text):
+Identify hidden requirements, budget signals, and specific technical obstacles.
+Respond with ONLY a valid JSON object:
 {{
-  "pain_points": ["list of identified pain points"],
-  "tech_hints": ["any mentioned technologies or requirements"],
+  "pain_points": ["explicit and implicit pains"],
+  "tech_stack": ["detected tech requirements"],
   "urgency": "low|medium|high",
   "budget_signal": "unknown|low|medium|high",
-  "project_type": "one-line description of the project type",
-  "ideal_solution": "brief description of the ideal solution",
-  "estimated_complexity": "simple|medium|complex"
+  "ideal_approach": "concise technical solution summary",
+  "complexity_score": 1-10
 }}"""
 
+PROPOSAL_PROMPT = """Write a high-converting freelancing proposal using the PAS (Problem-Agitation-Solution) framework.
+Context:
+Source: {source}
+Title: {title}
+Description: {description}
+Analysis: {analysis}
 
-PROPOSAL_PROMPT = """You are an expert freelancer writing a winning proposal. Be concise, human, and specific.
-
-Lead Info:
-- Source: {source}
-- Title: {title}
-- Description: {description}
-
-Analysis:
-{analysis}
-
-Write a proposal with ONLY this JSON structure (no markdown, no extra text):
+Respond with ONLY this JSON:
 {{
-  "hook": "1-2 sentences that prove you understand their exact problem",
-  "solution": "2-3 sentences describing your specific approach and why it works",
-  "tech_stack": "comma-separated list of technologies you'd use",
-  "timeline": "realistic timeline estimate",
-  "closing_question": "1 open-ended question that gets them talking",
-  "upsell": "1 natural upsell opportunity that adds value"
+  "hook": "1 sentence showing you've READ their specific problem",
+  "pas_agitation": "1-2 sentences highlighting the cost of NOT fixing the problem",
+  "pas_solution": "2 sentences on how your approach solves it specifically",
+  "tech_stack": "comma-separated tech",
+  "call_to_action": "An open, low-friction question"
 }}
 
-Rules:
-- Sound like a real human, not a bot
-- Reference specifics from their description
-- Never use phrases like 'I hope this message finds you well'
-- Be direct and confident"""
-
+Tone: Bold, Human, Direct. No fluff."""
 
 def analyze_lead(source: str, title: str, description: str) -> dict:
     try:
@@ -77,20 +66,17 @@ def analyze_lead(source: str, title: str, description: str) -> dict:
             log.error("analyze_lead: truncated/non-JSON response: %s", e)
             return {}
     except BadRequestError as e:
-        log.error("Cerebras 400 in analyze_lead — status=%s message=%r body=%s",
-                  e.status_code, e.message, e.body)
-        return {"error": f"Cerebras 400: {e.message}", "pain_points": [], "urgency": "unknown"}
+        log.error("LLM 400 — status=%s message=%r", e.status_code, e.message)
+        return {"error": f"LLM 400: {e.message}"}
     except APIStatusError as e:
-        log.error("Cerebras API error in analyze_lead — status=%s message=%r body=%s",
-                  e.status_code, e.message, e.body)
-        return {"error": f"Cerebras {e.status_code}: {e.message}", "pain_points": [], "urgency": "unknown"}
+        log.error("LLM API error — status=%s message=%r", e.status_code, e.message)
+        return {"error": f"LLM {e.status_code}: {e.message}"}
     except APIConnectionError as e:
-        log.error("Cerebras connection error in analyze_lead: %s", e)
-        return {"error": f"Cerebras connection error: {e}", "pain_points": [], "urgency": "unknown"}
+        log.error("LLM connection error: %s", e)
+        return {"error": f"LLM connection error: {e}"}
     except Exception as e:
         log.error("Unexpected error in analyze_lead: %s", e, exc_info=True)
-        return {"error": str(e), "pain_points": [], "urgency": "unknown"}
-
+        return {"error": str(e)}
 
 def generate_proposal(source: str, title: str, description: str,
                       analysis: dict) -> dict:
@@ -118,24 +104,22 @@ def generate_proposal(source: str, title: str, description: str,
             log.error("generate_proposal: truncated/non-JSON response: %s", e)
             return {}
     except BadRequestError as e:
-        log.error("Cerebras 400 in generate_proposal — status=%s message=%r body=%s",
-                  e.status_code, e.message, e.body)
-        return {"error": f"Cerebras 400: {e.message}", "hook": "Could not generate proposal."}
+        log.error("LLM 400 — status=%s message=%r", e.status_code, e.message)
+        return {"error": f"LLM 400: {e.message}"}
     except APIStatusError as e:
-        log.error("Cerebras API error in generate_proposal — status=%s message=%r body=%s",
-                  e.status_code, e.message, e.body)
-        return {"error": f"Cerebras {e.status_code}: {e.message}", "hook": "Could not generate proposal."}
+        log.error("LLM API error — status=%s message=%r", e.status_code, e.message)
+        return {"error": f"LLM {e.status_code}: {e.message}"}
     except APIConnectionError as e:
-        log.error("Cerebras connection error in generate_proposal: %s", e)
-        return {"error": f"Cerebras connection error: {e}", "hook": "Could not generate proposal."}
+        log.error("LLM connection error: %s", e)
+        return {"error": f"LLM connection error: {e}"}
     except Exception as e:
         log.error("Unexpected error in generate_proposal: %s", e, exc_info=True)
-        return {"error": str(e), "hook": "Could not generate proposal."}
-
+        return {"error": str(e)}
 
 def process_lead(lead_id: int, source: str, title: str,
                  description: str) -> tuple[str, str]:
     """Returns (analysis_json, proposal_json) as strings."""
     analysis = analyze_lead(source, title, description)
+    time.sleep(1.5) # Safety delay for rate limits
     proposal = generate_proposal(source, title, description, analysis)
     return json.dumps(analysis), json.dumps(proposal)
