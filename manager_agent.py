@@ -56,7 +56,7 @@ def run_manager_cycle() -> dict:
     if api_key:
         resend.api_key = api_key
 
-    leads = db.get_leads(status="new")
+    leads = db.get_leads(status="new", limit=5)
     if not leads:
         log.info("Manager Agent: No 'new' leads found.")
         return {"processed": 0, "qualified": 0, "built": 0}

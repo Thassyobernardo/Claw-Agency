@@ -14,10 +14,11 @@ from apscheduler.triggers.interval import IntervalTrigger
 import database as db
 import qualifier
 import builder
-from scrapers import upwork_scraper
+from scrapers import upwork_scraper, linkedin_scraper, google_maps_scraper
 import sales_agent
 import manager_agent
 import support_agent
+import config
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,7 +27,10 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "hunter-agent-secret")
+# Initialise Telegram scheduler
+from scheduler import init_scheduler
+init_scheduler(app)
+app.secret_key = os.getenv("SECRET_KEY", f"{config.AGENCY_NAME.lower()}-secret")
 
 # Initialise the DB schema on the first non-health request so Flask can
 # bind and respond to /health immediately without waiting for PostgreSQL.
@@ -61,32 +65,47 @@ def fromjson_filter(value):
 # ── Config ────────────────────────────────────────────────────────────────────
 
 def get_keywords() -> list[str]:
-    raw = os.getenv(
-        "KEYWORDS",
-        "automation,chatbot,zapier,n8n,crm,whatsapp bot,workflow,ai agent",
-    )
-    return [k.strip() for k in raw.split(",") if k.strip()]
+    return config.TARGET_SECTORS
 
 
 def get_scan_interval() -> int:
-    return int(os.getenv("SCAN_INTERVAL_HOURS", "3"))
+    return int(os.getenv("SCAN_INTERVAL_HOURS", "6"))
 
 
 # ── Scan job ─────────────────────────────────────────────────────────────────
 
 def run_scan():
-    keywords = get_keywords()
-    log.info(f"Starting scan — keywords: {keywords}")
+    log.info(f"Starting multi-platform scan for {config.AGENCY_NAME}")
     total = 0
 
-    try:
-        n = upwork_scraper.scrape(keywords)
-        log.info(f"Upwork: +{n} leads")
-        total += n
-    except Exception as e:
-        log.error(f"Upwork scraper error: {e}")
+    # 1. LinkedIn
+    if "linkedin" in config.TARGET_PLATFORMS:
+        try:
+            n = linkedin_scraper.scrape(max_per_keyword=5)
+            log.info(f"LinkedIn: +{n} leads")
+            total += n
+        except Exception as e:
+            log.error(f"LinkedIn scraper error: {e}")
 
-    log.info(f"Scan complete — {total} new leads saved")
+    # 2. Google Maps
+    if "google_maps" in config.TARGET_PLATFORMS:
+        try:
+            n = google_maps_scraper.scrape(max_results=5)
+            log.info(f"Google Maps: +{n} leads")
+            total += n
+        except Exception as e:
+            log.error(f"Google Maps scraper error: {e}")
+
+    # 3. Upwork (Fallback/Original)
+    if "upwork" in config.TARGET_PLATFORMS:
+        try:
+            n = upwork_scraper.scrape(config.TARGET_SECTORS)
+            log.info(f"Upwork: +{n} leads")
+            total += n
+        except Exception as e:
+            log.error(f"Upwork scraper error: {e}")
+
+    log.info(f"Scan complete — {total} total new leads saved")
     return total
 
 
@@ -106,6 +125,7 @@ def dashboard():
         leads=leads,
         keywords=get_keywords(),
         scan_interval=get_scan_interval(),
+        agency_name=config.AGENCY_NAME
     )
 
 

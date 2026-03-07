@@ -21,28 +21,16 @@ from apify_client import ApifyClient
 from database import upsert_lead, save_proposal
 from proposal_generator import process_lead
 
+import config
+
 log = logging.getLogger(__name__)
 
 SOURCE = "upwork"
 ACTOR = "jan.mraz~upwork-jobs-scraper"
 
-CORE_KEYWORDS = [
-    "zapier automation",
-    "n8n automation",
-    "crm automation",
-    "whatsapp bot",
-    "chatbot",
-    "workflow automation",
-    "email automation",
-    "ai agent",
-    "business automation",
-    "make.com"
-]
-
 
 def _get_client() -> ApifyClient:
     token = os.getenv("APIFY_TOKEN")
-    log.info(f"[Upwork] APIFY_TOKEN (first 8): {str(token)[:8]}...")
     if not token:
         raise RuntimeError("APIFY_TOKEN is not set.")
     return ApifyClient(token, timeout_secs=300)
@@ -50,13 +38,12 @@ def _get_client() -> ApifyClient:
 
 def _fetch_jobs(client: ApifyClient, keyword: str, max_jobs: int = 5) -> list[dict]:
     try:
-        # jan.mraz/upwork-jobs-scraper input format
         run_input = {
             "queries": [keyword],
             "maxResults": max_jobs,
             "sort": "recency"
         }
-        log.info(f"[Upwork] Starting actor run for '{keyword}' with input: {run_input}")
+        log.info(f"[Upwork] Starting actor run for '{keyword}'")
         run = client.actor(ACTOR).call(run_input=run_input, timeout_secs=300)
         items = client.dataset(run["defaultDatasetId"]).list_items().items
         return items if isinstance(items, list) else []
@@ -66,7 +53,6 @@ def _fetch_jobs(client: ApifyClient, keyword: str, max_jobs: int = 5) -> list[di
 
 
 def _parse_job(item: dict) -> dict | None:
-    # jan.mraz/upwork-jobs-scraper output format
     title = item.get("title", "").strip()
     url   = item.get("url", "").strip()
     if not title or not url:
@@ -81,21 +67,18 @@ def _parse_job(item: dict) -> dict | None:
     }
 
 
-def scrape(keywords: list[str] = [], max_per_keyword: int = 5) -> int:
-    client = _get_client()
+def scrape(keywords: list[str] = None, max_per_keyword: int = 5) -> int:
+    try:
+        client = _get_client()
+    except Exception as e:
+        log.error(f"[Upwork] {e}")
+        return 0
 
-    # Merge CORE_KEYWORDS with any extra caller keywords, deduplicating
-    seen: set[str] = set()
-    all_kws: list[str] = []
-    for kw in CORE_KEYWORDS + list(keywords or []):
-        key = kw.lower().strip()
-        if key not in seen:
-            seen.add(key)
-            all_kws.append(kw)
-
+    # Use config sectors if none provided
+    search_keywords = keywords if keywords else config.TARGET_SECTORS
+    
     saved = 0
-
-    for i, kw in enumerate(all_kws):
+    for i, kw in enumerate(search_keywords):
         if i > 0:
             time.sleep(2)
 
@@ -115,6 +98,8 @@ def scrape(keywords: list[str] = [], max_per_keyword: int = 5) -> int:
                 author=None,
                 posted_at=parsed["posted_at"],
                 keywords=kw,
+                location="Worldwide",
+                sector=kw
             )
 
             if lead_id:

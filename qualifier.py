@@ -6,15 +6,16 @@ from ai_utils import (
 )
 
 import database as db
+import config
 
 log = logging.getLogger(__name__)
 
 
-QUALIFICATION_PROMPT = """You are a senior automation consultant evaluating a client lead for a freelance agency.
+QUALIFICATION_PROMPT = f"""You are a senior B2B automation consultant evaluating a client lead for {config.AGENCY_NAME}.
 
-Lead Source: {source}
-Title: {title}
-Description: {description}
+Lead Source: {{source}}
+Title: {{title}}
+Description: {{description}}
 
 Analyze this lead for automation potential and respond with ONLY a valid JSON object (no markdown, no extra text):
 {{

@@ -78,7 +78,9 @@ def init_db():
             ("qualification",    "TEXT"),
             ("deliverable_path", "TEXT"),
             ("sequence_stage",   "INTEGER DEFAULT 0"),
-            ("last_contact_at",  "TEXT")
+            ("last_contact_at",  "TEXT"),
+            ("location",         "TEXT"),
+            ("sector",           "TEXT")
         ]:
             cur.execute(
                 f"ALTER TABLE leads ADD COLUMN IF NOT EXISTS {col} {definition}"
@@ -88,7 +90,7 @@ def init_db():
 
 def upsert_lead(source: str, title: str, description: str,
                 url: str, author: str = None, posted_at: str = None,
-                keywords: str = None) -> int | None:
+                keywords: str = None, location: str = None, sector: str = None) -> int | None:
     now = datetime.utcnow().isoformat()
     with get_conn() as conn:
         cur = conn.cursor()
@@ -100,11 +102,11 @@ def upsert_lead(source: str, title: str, description: str,
             """
             INSERT INTO leads
                 (source, title, description, url, author, posted_at, keywords,
-                 status, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 'new', %s, %s)
+                 location, sector, status, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'new', %s, %s)
             RETURNING id
             """,
-            (source, title, description, url, author, posted_at, keywords, now, now),
+            (source, title, description, url, author, posted_at, keywords, location, sector, now, now),
         )
         return cur.fetchone()[0]
 

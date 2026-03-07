@@ -6,12 +6,22 @@ from ai_utils import (
 )
 import time
 
+import config
+
 log = logging.getLogger(__name__)
 
-ANALYSIS_PROMPT = """Analyze this client lead with senior consultant precision.
-Source: {source}
-Title: {title}
-Description: {description}
+LANGUAGE_MAP = {
+    "fr": "French",
+    "en": "English",
+    "es": "Spanish",
+    "de": "German"
+}
+target_lang = LANGUAGE_MAP.get(config.OUTREACH_LANGUAGE, "French")
+
+ANALYSIS_PROMPT = f"""Analyze this client lead with senior consultant precision for {config.AGENCY_NAME}.
+Source: {{source}}
+Title: {{title}}
+Description: {{description}}
 
 Identify hidden requirements, budget signals, and specific technical obstacles.
 Respond with ONLY a valid JSON object:
@@ -24,12 +34,12 @@ Respond with ONLY a valid JSON object:
   "complexity_score": 1-10
 }}"""
 
-PROPOSAL_PROMPT = """Write a high-converting freelancing proposal using the PAS (Problem-Agitation-Solution) framework.
+PROPOSAL_PROMPT = f"""Write a high-converting B2B proposal using the PAS (Problem-Agitation-Solution) framework for {config.AGENCY_NAME}.
 Context:
-Source: {source}
-Title: {title}
-Description: {description}
-Analysis: {analysis}
+Source: {{source}}
+Title: {{title}}
+Description: {{description}}
+Analysis: {{analysis}}
 
 Respond with ONLY this JSON:
 {{
@@ -40,7 +50,7 @@ Respond with ONLY this JSON:
   "call_to_action": "An open, low-friction question to start a technical conversation"
 }}
 
-Tone: Professional, Bold, Strategic. No fluff. 100% English."""
+Tone: Professional, Bold, Strategic. No fluff. 100% {target_lang}."""
 
 def analyze_lead(source: str, title: str, description: str) -> dict:
     try:
