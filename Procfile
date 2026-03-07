@@ -1,1 +1,1 @@
-web: gunicorn safe_main:app
+web: gunicorn main:app

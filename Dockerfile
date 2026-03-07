@@ -28,4 +28,4 @@ RUN mkdir -p builds
 EXPOSE 8080
 
 # Run with Gunicorn for Flask + B2B Prospecting Setup
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "4", "safe_main:app"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "4", "main:app"]
