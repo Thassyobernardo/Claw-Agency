@@ -26,6 +26,9 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 app = Flask(__name__)
+# Initialise Telegram scheduler
+from scheduler import init_scheduler
+init_scheduler(app)
 app.secret_key = os.getenv("SECRET_KEY", "hunter-agent-secret")
 
 # Initialise the DB schema on the first non-health request so Flask can
