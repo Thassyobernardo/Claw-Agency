@@ -50,6 +50,7 @@ def _fetch_daily_stats() -> dict:
         ).scalar()
     return {"leads": leads_cnt, "emails": emails_cnt, "replies": replies_cnt}
 
+<<<<<<< HEAD
 import config
 
 def daily_telegram_report() -> None:
@@ -67,6 +68,16 @@ def daily_telegram_report() -> None:
         f"📨 Emails envoyés: {stats['emails']}\n"
         f"💬 Réponses reçues: {stats['replies']}\n"
         f"📅 Système actif (Luxembourg)"
+=======
+def daily_telegram_report() -> None:
+    """Compose the daily report and send it via Telegram."""
+    stats = _fetch_daily_stats()
+    message = (
+        f"📊 <b>Relatório Diário</b> (Luxemburgo)\n"
+        f"🔍 Leads encontrados: {stats['leads']}\n"
+        f"📨 Emails enviados: {stats['emails']}\n"
+        f"💬 Respostas recebidas: {stats['replies']}"
+>>>>>>> 86247a63009975daf0fdd0e5cab75e22326c39f4
     )
     send_telegram(message)
 

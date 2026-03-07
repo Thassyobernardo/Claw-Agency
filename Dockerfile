@@ -27,5 +27,5 @@ RUN mkdir -p builds
 # Expose port
 EXPOSE 8080
 
-# Run with Uvicorn (Pro Production Setup)
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080", "--workers", "4", "--proxy-headers"]
+# Run with Gunicorn for Flask + B2B Prospecting Setup
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "4", "safe_main:app"]
