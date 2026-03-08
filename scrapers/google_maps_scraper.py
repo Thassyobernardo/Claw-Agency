@@ -1,11 +1,10 @@
 """
-Google Maps scraper via Apify Actor (jan.mraz/google-maps-scraper).
-Targets local businesses like dental clinics and real estate agencies in Luxembourg.
+Google Maps scraper via Apify Actor (compass/crawler-google-places).
+Targets dental clinics and real estate agencies in Luxembourg.
 """
 import os
 import time
 import logging
-import config
 from apify_client import ApifyClient
 from database import save_lead, log_action
 
@@ -20,67 +19,76 @@ def _get_client() -> ApifyClient:
         raise RuntimeError("APIFY_TOKEN is not set.")
     return ApifyClient(token)
 
-def scrape(queries: list[str] = None, max_results: int = 10) -> int:
+def scrape() -> int:
+    """
+    Simplified Google Maps scraper.
+    Runs exactly 4 searches and saves results to the database.
+    """
     try:
         client = _get_client()
     except Exception as e:
         log.error(f"[GoogleMaps] {e}")
         return 0
 
-    # If no queries provided, build from config
-    search_queries = queries
-    if not search_queries:
-        search_queries = []
-        # Target sectors in Luxembourg specifically as requested
-        for sector in config.TARGET_SECTORS:
-            search_queries.append(f"{sector} Luxembourg")
+    queries = [
+        "clinique dentaire Luxembourg",
+        "dentiste Luxembourg",
+        "agence immobilière Luxembourg",
+        "immobilier Luxembourg"
+    ]
 
     saved = 0
-    for query in search_queries:
-        log.info(f"[GoogleMaps] Searching for: {query}")
+    for query in queries:
+        log.info(f"[GoogleMaps] Running search: {query}")
+        
+        # Sector logic
+        sector = "dental" if "dent" in query.lower() else "real_estate"
+        
         try:
             run_input = {
-                "queries": [query],
-                "maxResults": max_results,
-                "language": "fr",
-                "deeperCity": True,
+                "searchStringsArray": [query],
+                "maxCrawledPlacesPerSearch": 20,
+                "language": "fr"
             }
-            run = client.actor(ACTOR).call(run_input=run_input, timeout_secs=300)
+            
+            # Start the actor and wait for it to finish
+            run = client.actor(ACTOR).call(run_input=run_input, timeout_secs=600)
             items = client.dataset(run["defaultDatasetId"]).list_items().items
             
+            log.info(f"[GoogleMaps] Found {len(items)} items for '{query}'")
+            
             for item in items:
-                name = item.get("title", "").strip()
-                url = item.get("website") or item.get("url", "").strip()
+                name = item.get("title") or item.get("name", "").strip()
                 if not name:
                     continue
                 
-                address = item.get("address", "Luxembourg")
-                category = item.get("categoryName", "Business")
-                phone = item.get("phone", "N/A")
+                phone = item.get("phone") or item.get("phoneNumber", "N/A")
+                website = item.get("website") or item.get("url", "N/A")
+                address = item.get("address") or item.get("fullAddress", "Luxembourg")
                 
-                # New SQLAlchemy-based schema uses save_lead(name, email, phone, sector, location, score, source, notes)
+                # Use save_lead(name, email, phone, sector, location, score, source, notes)
+                # Note: We put website in notes since there's no official website field in schema
                 success = save_lead(
                     name=name,
-                    email="N/A", # Google Maps often lacks direct emails
+                    email="N/A",
                     phone=phone,
-                    sector=category,
+                    sector=sector,
                     location=address,
-                    score=50, # Default score
+                    score=70,
                     source=SOURCE,
-                    notes=f"Found via Google Maps search for {query}. Web: {url}"
+                    notes=f"Website: {website} | Search: {query}"
                 )
 
                 if success:
                     saved += 1
-                    log.info(f"[GoogleMaps] Saved lead: {name[:60]}")
+            
+            # Anti-hammering delay
+            time.sleep(2)
 
         except Exception as e:
-            log.error(f"[GoogleMaps] Actor run failed for '{query}': {e}")
-        
-        # Delay to avoid hammering the API
-        time.sleep(2)
+            log.error(f"[GoogleMaps] Actor failed for '{query}': {e}")
 
     if saved > 0:
-        log_action("google_maps_scan", f"Found {saved} leads for {search_queries}")
+        log_action("google_maps_scan", f"Successful scan. Added {saved} leads from Luxembourg.")
         
     return saved
