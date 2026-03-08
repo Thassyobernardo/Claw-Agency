@@ -172,6 +172,22 @@ def send_outreach():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/enrich-leads")
+def enrich_leads_route():
+    try:
+        import email_enricher
+        import threading
+        def worker():
+            try:
+                email_enricher.run_enrichment()
+            except Exception as e:
+                log.error(f"Enrichment error: {e}")
+        
+        threading.Thread(target=worker, daemon=True).start()
+        return jsonify({"status": "ok", "message": "Enrichment started in background"}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/stats")
 def api_stats():
     try:
