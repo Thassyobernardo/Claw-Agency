@@ -12,6 +12,10 @@ def hash_password(password):
     hashed = hashlib.sha256(f"{salt}{password}".encode()).hexdigest()
     return f"{salt}:{hashed}"
 
+def is_whitelisted(email):
+    email_lower = email.lower()
+    return email_lower == "thassyo@gmail.com" or email_lower.endswith("@clawagency.online")
+
 def verify_password(password, stored):
     try:
         salt, hashed = stored.split(":")
@@ -74,6 +78,9 @@ def login_user(email, password):
         if status != 'active':
             return None, "Conta suspensa. Contacta o suporte."
         
+        if is_whitelisted(email):
+            plan = "enterprise"
+        
         token = create_token(user_id, email)
         return {"token": token, "user_id": user_id, "name": name, "plan": plan}, None
     except Exception as e:
@@ -95,9 +102,15 @@ def get_user_by_id(user_id):
         row = cur.fetchone()
         if not row:
             return None
+        
+        email = row[1]
+        plan = row[4]
+        if is_whitelisted(email):
+            plan = "enterprise"
+
         return {
-            "id": row[0], "email": row[1], "name": row[2],
-            "company": row[3], "plan": row[4], "status": row[5],
+            "id": row[0], "email": email, "name": row[2],
+            "company": row[3], "plan": plan, "status": row[5],
             "stripe_customer_id": row[6], "stripe_subscription_id": row[7],
             "agent_config": row[8], "created_at": str(row[9])
         }

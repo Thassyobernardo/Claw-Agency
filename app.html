@@ -809,7 +809,19 @@
 
     .cfg-field textarea {
       resize: vertical;
-      min-height: 90px;
+      min-height: 120px;
+      font-family: 'Epilogue', sans-serif;
+      line-height: 1.5;
+    }
+
+    .skill-badge {
+      background: var(--red);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 2px;
+      font-size: 9px;
+      vertical-align: middle;
+      margin-left: 5px;
     }
 
     .btn-save {
@@ -1003,13 +1015,14 @@
         transform: rotate(360deg);
       }
     }
-  
+
     /* ── LANGUAGE DROPDOWN ── */
     .lang-dropdown-wrap {
       position: relative;
       padding: 12px 16px;
       border-top: 1px solid var(--border);
     }
+
     .lang-dropdown-btn {
       display: flex;
       align-items: center;
@@ -1027,18 +1040,22 @@
       transition: all 0.15s;
       letter-spacing: 0.02em;
     }
+
     .lang-dropdown-btn:hover {
       border-color: var(--ink);
       background: var(--white);
     }
+
     .lang-dropdown-btn svg {
       margin-left: auto;
       color: var(--muted);
       transition: transform 0.2s;
     }
+
     .lang-dropdown-btn.open svg {
       transform: rotate(180deg);
     }
+
     .lang-dropdown-menu {
       display: none;
       position: absolute;
@@ -1048,13 +1065,15 @@
       background: var(--white);
       border: 1px solid var(--border);
       border-radius: 3px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.10);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.10);
       z-index: 200;
       overflow: hidden;
     }
+
     .lang-dropdown-menu.open {
       display: block;
     }
+
     .lang-opt {
       display: flex;
       align-items: center;
@@ -1066,23 +1085,25 @@
       transition: background 0.12s;
       font-family: 'Epilogue', sans-serif;
     }
+
     .lang-opt:hover {
       background: var(--warm);
       color: var(--ink);
     }
+
     .lang-opt.active {
       color: var(--ink);
       font-weight: 500;
       background: var(--warm);
     }
+
     .lang-opt.active::after {
       content: '✓';
       margin-left: auto;
       color: var(--red);
       font-size: 12px;
     }
-
-    </style>
+  </style>
 </head>
 
 <body>
@@ -1196,15 +1217,17 @@
         <div class="nav-item" onclick="openPanel('leads',this)"><span class="nav-icon">◎</span> <span
             data-i18n="nav_leads">Leads</span></div>
         <div class="nav-item" onclick="openPanel('agent',this)"><span class="nav-icon">◉</span> <span
-            data-i18n="nav_agent">Agente</span></div>
+            data-i18n="nav_agent">Agent Config</span></div>
         <div class="nav-item" onclick="openPanel('pricing',this)"><span class="nav-icon">◇</span> <span
-            data-i18n="nav_plans">Planos</span></div>
+            data-i18n="nav_plans">Pricing</span></div>
       </nav>
       <div class="lang-dropdown-wrap">
         <button class="lang-dropdown-btn" onclick="toggleLangMenu(event)" id="lang-btn">
           <span id="lang-flag-current">🇬🇧</span>
           <span id="lang-label-current">EN</span>
-          <svg width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
+            <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
         </button>
         <div class="lang-dropdown-menu" id="lang-menu">
           <div class="lang-opt" onclick="setLang('en')" data-lang="en"><span>🇬🇧</span> English</div>
@@ -1260,46 +1283,41 @@
         </div>
       </div>
       <div id="panel-agent" class="panel">
-        <div class="page-eyebrow" data-i18n="agent_eyebrow">Configuração</div>
-        <div class="page-title" data-i18n="agent_title">Agente IA</div>
-        <div class="page-sub" data-i18n="agent_subtitle">Personaliza como o agente procura e contacta leads</div>
+        <div class="page-eyebrow" data-i18n="agent_eyebrow">Configuration</div>
+        <div class="page-title" data-i18n="agent_title">AI Hunting Skill</div>
+        <div class="page-sub" data-i18n="agent_subtitle">Configure the "brain" of your agent for personalized outreach
+        </div>
+
         <div class="cfg-grid">
           <div class="cfg-card">
-            <div class="cfg-card-title" data-i18n="agent_prospecting">Prospeção</div>
-            <div class="cfg-field"><label data-i18n="agent_label_sector">Sector alvo</label><input type="text"
-                id="cfg-sector" data-i18n-ph="agent_ph_sector" placeholder="ex: Clínicas dentárias"></div>
-            <div class="cfg-field"><label data-i18n="agent_label_location">Localização</label><input type="text"
-                id="cfg-location" data-i18n-ph="agent_ph_loc" placeholder="ex: Luxembourg"></div>
-            <div class="cfg-field"><label data-i18n="agent_label_leads">Leads por scan</label><select id="cfg-per-scan">
-                <option value="10">10 leads</option>
-                <option value="20" selected>20 leads</option>
-                <option value="50">50 leads</option>
-              </select></div>
+            <div class="cfg-card-title" data-i18n="agent_prospecting">Targeting</div>
+            <div class="cfg-field"><label data-i18n="agent_label_sector">Target Sector</label><input type="text"
+                id="cfg-sector" placeholder="e.g. Dental Clinics"></div>
+            <div class="cfg-field"><label data-i18n="agent_label_location">Location</label><input type="text"
+                id="cfg-location" placeholder="e.g. Luxembourg"></div>
           </div>
+
           <div class="cfg-card">
-            <div class="cfg-card-title" data-i18n="agent_outreach">Outreach</div>
-            <div class="cfg-field"><label data-i18n="agent_label_lang">Idioma dos emails</label><select id="cfg-lang">
-                <option value="en" data-i18n="lang_en">English</option>
-                <option value="pt" data-i18n="lang_pt">Português</option>
-                <option value="fr" data-i18n="lang_fr">Français</option>
-                <option value="de" data-i18n="lang_de">Deutsch</option>
-                <option value="es" data-i18n="lang_es">Español</option>
-                <option value="lu">Lëtzebuergesch</option>
+            <div class="cfg-card-title" data-i18n="agent_outreach">Outreach Settings</div>
+            <div class="cfg-field"><label data-i18n="agent_label_lang">Language</label><select id="cfg-lang">
+                <option value="en">English</option>
+                <option value="fr">Français</option>
+                <option value="pt">Português</option>
               </select></div>
-            <div class="cfg-field"><label data-i18n="agent_label_tone">Tom da mensagem</label><select id="cfg-tone">
-                <option value="profissional" data-i18n="tone_prof">Profissional</option>
-                <option value="casual" data-i18n="tone_casual">Casual</option>
-                <option value="directo" data-i18n="tone_direct">Directo</option>
-              </select></div>
-            <div class="cfg-field"><label data-i18n="agent_label_reply">Email de resposta</label><input type="email"
+            <div class="cfg-field"><label data-i18n="agent_label_reply">Reply-to Email</label><input type="email"
                 id="cfg-reply" placeholder="bernardo@clawagency.online"></div>
           </div>
+
           <div class="cfg-card" style="grid-column:1/-1">
-            <div class="cfg-card-title" data-i18n="agent_label_intro">Mensagem personalizada</div>
-            <div class="cfg-field"><label data-i18n="agent_label_intro">Introdução do email (opcional)</label><textarea
-                id="cfg-intro" data-i18n-ph="agent_ph_intro"
-                placeholder="Bonjour, nous sommes Claw Agency..."></textarea></div>
-            <button class="btn-save" onclick="saveConfig()" data-i18n="agent_save">Guardar configuração</button>
+            <div class="cfg-card-title">AI Adaptive Writing Skill <span class="skill-badge">ADVANCED</span></div>
+            <div class="cfg-field">
+              <label>Custom Instructions for the Agent</label>
+              <textarea id="cfg-instructions"
+                placeholder="Example: Be professional but aggressive. Mention that we are based in Luxembourg. Focus on how our AI can fill their empty appointment slots..."></textarea>
+              <small style="color: var(--muted); font-size: 11px;">O Claw analisará o website do lead e usará estas
+                instruções para criar uma proposta única.</small>
+            </div>
+            <button class="btn-save" onclick="saveConfig()" data-i18n="agent_save">Save & Sync Agent</button>
           </div>
         </div>
       </div>
@@ -1971,12 +1989,12 @@
       localStorage.setItem('claw_lang', lang);
       updateUI();
       // update dropdown button
-      const flags = {en:'🇬🇧',pt:'🇵🇹',fr:'🇫🇷',de:'🇩🇪',es:'🇪🇸'};
-      const labels = {en:'EN',pt:'PT',fr:'FR',de:'DE',es:'ES'};
+      const flags = { en: '🇬🇧', pt: '🇵🇹', fr: '🇫🇷', de: '🇩🇪', es: '🇪🇸' };
+      const labels = { en: 'EN', pt: 'PT', fr: 'FR', de: 'DE', es: 'ES' };
       const flagEl = document.getElementById('lang-flag-current');
       const labelEl = document.getElementById('lang-label-current');
-      if(flagEl) flagEl.textContent = flags[lang]||'🇬🇧';
-      if(labelEl) labelEl.textContent = labels[lang]||'EN';
+      if (flagEl) flagEl.textContent = flags[lang] || '🇬🇧';
+      if (labelEl) labelEl.textContent = labels[lang] || 'EN';
       // update active opt
       document.querySelectorAll('.lang-opt').forEach(opt => opt.classList.toggle('active', opt.dataset.lang === lang));
       // close menu
@@ -2072,13 +2090,13 @@
       document.querySelectorAll('.panel').forEach(p => p.classList.remove('active')); document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
       document.getElementById(`panel-${name}`).classList.add('active'); el.classList.add('active');
       if (name === 'leads') { try { const token = localStorage.getItem('claw_token'); const r = await fetch(`${API}/api/my-leads?limit=200`, { headers: { 'Authorization': `Bearer ${token}` } }); const leads = await r.json(); renderTable('tbl-full', leads); document.getElementById('chip-all').textContent = leads.length; } catch (e) { } }
-      if (name === 'agent') { try { const token = localStorage.getItem('claw_token'); const r = await fetch(`${API}/api/me`, { headers: { 'Authorization': `Bearer ${token}` } }); const d = await r.json(); const c = d.agent_config || {}; document.getElementById('cfg-sector').value = c.sector || ''; document.getElementById('cfg-location').value = c.location || ''; document.getElementById('cfg-lang').value = c.language || 'fr'; document.getElementById('cfg-tone').value = c.tone || 'profissional'; document.getElementById('cfg-reply').value = c.reply_email || ''; document.getElementById('cfg-intro').value = c.intro || ''; } catch (e) { } }
+      if (name === 'agent') { try { const token = localStorage.getItem('claw_token'); const r = await fetch(`${API}/api/me`, { headers: { 'Authorization': `Bearer ${token}` } }); const d = await r.json(); const c = d.agent_config || {}; document.getElementById('cfg-sector').value = c.sector || ''; document.getElementById('cfg-location').value = c.location || ''; document.getElementById('cfg-lang').value = c.language || 'en'; document.getElementById('cfg-reply').value = c.reply_email || ''; document.getElementById('cfg-instructions').value = c.instructions || ''; } catch (e) { } }
     }
     async function saveConfig() {
-      const config = { sector: document.getElementById('cfg-sector').value, location: document.getElementById('cfg-location').value, language: document.getElementById('cfg-lang').value, tone: document.getElementById('cfg-tone').value, reply_email: document.getElementById('cfg-reply').value, intro: document.getElementById('cfg-intro').value, leads_per_scan: document.getElementById('cfg-per-scan').value };
+      const config = { sector: document.getElementById('cfg-sector').value, location: document.getElementById('cfg-location').value, language: document.getElementById('cfg-lang').value, reply_email: document.getElementById('cfg-reply').value, instructions: document.getElementById('cfg-instructions').value };
       const btn = event.target; setBtn(btn, true);
-      try { const token = localStorage.getItem('claw_token'); await fetch(`${API}/api/agent-config`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(config) }); toast('Configuração guardada ✓'); }
-      catch (e) { toast('Erro ao guardar', 'error'); }
+      try { const token = localStorage.getItem('claw_token'); await fetch(`${API}/api/agent-config`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(config) }); toast('Skill Synced Successfully ✓'); }
+      catch (e) { toast('Sync Error', 'error'); }
       setBtn(btn, false);
     }
     async function choosePlan(plan) {
