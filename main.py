@@ -6,6 +6,16 @@ import requests
 from datetime import datetime
 from flask import Flask, jsonify, request
 from groq import Groq
+from database import (
+    get_stats,
+    get_leads,
+    get_tenant_stats,
+    get_tenant_leads,
+    save_lead,
+    log_action,
+    get_upwork_proposals_count_today,
+)
+from config.skills import get_skill_for_job
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -255,7 +265,13 @@ def get_jobs_from_apify():
 
 
 # ---------------- GROQ AI (O CÉREBRO) ----------------
-def generate_smart_proposal(job_title: str, job_description: str) -> str:
+def generate_smart_proposal(
+    job_title: str, job_description: str, skill: dict | None = None
+) -> str:
+    """
+    Gera proposta com Groq. Se skill for passado, usa a persona dessa skill;
+    senão usa uma persona genérica.
+    """
     log.info(f"🧠 Gerando proposta com IA Groq para: {job_title}")
     groq_api_key = os.getenv("GROQ_API_KEY")
 
@@ -263,22 +279,14 @@ def generate_smart_proposal(job_title: str, job_description: str) -> str:
         log.warning("GROQ_API_KEY não configurada. Usando mensagem default.")
         return "Olá, vi a sua vaga e tenho a experiência técnica necessária para ajudar. Podemos falar?"
 
-    title_lower = job_title.lower()
-    if any(w in title_lower for w in ["data", "sql", "python", "bi", "power"]):
-        persona = (
-            "um Analista de Dados e Especialista em Python/Power BI altamente "
-            "analítico e focado em resultados de negócio."
-        )
-    elif any(w in title_lower for w in ["project", "manager", "gestão"]):
-        persona = (
-            "um experiente Gestor de Projetos de TI (Project Manager) focado em "
-            "organização, agilidade e liderança técnica."
-        )
-    else:
-        persona = "um especialista técnico e solucionador de problemas versátil."
+    persona = (skill or {}).get("persona") or (
+        "um especialista técnico e solucionador de problemas versátil."
+    )
+    if skill:
+        log.info(f"   Skill usada: {skill.get('name', skill.get('id', '?'))}")
 
     system_prompt = (
-        f"Você é {persona} Escreva uma 'Cover Letter' curta, direta e altamente "
+        f"Você é {persona}. Escreva uma 'Cover Letter' curta, direta e altamente "
         f"persuasiva para o Upwork.\n"
         f"O cliente postou esta vaga: '{job_title}'.\n"
         f"Detalhes: '{job_description}'.\n"
@@ -311,39 +319,89 @@ def generate_smart_proposal(job_title: str, job_description: str) -> str:
         return "Olá, vi a sua vaga e tenho a experiência técnica necessária para ajudar. Podemos falar?"
 
 
+# ---------------- FONTES DE VAGAS (multi-plataforma) ----------------
+def get_jobs_from_sources():
+    """
+    Agrega vagas de todas as fontes (Upwork via Apify + futuros sites).
+    Cada item fica com 'platform': 'upwork' | 'freelancer' | etc.
+    """
+    jobs = []
+    # Upwork (Apify)
+    apify_jobs = get_jobs_from_apify()
+    for j in apify_jobs:
+        j = dict(j)
+        j["platform"] = j.get("platform") or "upwork"
+        jobs.append(j)
+    # Futuro: jobs += get_jobs_from_freelancer() etc.
+    return jobs
+
+
 # ---------------- CORE MISSION ----------------
 def run_claw_mission():
     try:
-        send_telegram("🚀 *Claw Agent iniciado!* Acionando Apify para rastrear o mercado...")
+        send_telegram("🚀 *Claw Agent iniciado!* Buscando vagas em todas as fontes...")
 
-        jobs = get_jobs_from_apify()
+        jobs = get_jobs_from_sources()
         if not jobs:
-            send_telegram("⚠️ Nenhuma vaga encontrada no Apify desta vez.")
+            send_telegram("⚠️ Nenhuma vaga encontrada desta vez.")
             return
 
-        send_telegram(f"✅ Encontrei {len(jobs)} vagas alvo. A gerar propostas com IA...")
+        send_telegram(f"✅ Encontrei {len(jobs)} vagas. Gerando propostas com a skill certa para cada uma...")
 
         enable_sniper = os.getenv("ENABLE_SNIPER_AUTO", "false").lower() == "true"
+        upwork_max = int(os.getenv("UPWORK_MAX_PROPOSALS_PER_DAY", "5"))
+        upwork_today = get_upwork_proposals_count_today()
+        max_jobs_this_run = int(os.getenv("CLAW_MAX_JOBS_PER_RUN", "5"))
 
-        for job in jobs[:3]:
+        for job in jobs[:max_jobs_this_run]:
             title = job.get("title", "Sem título")
             description = job.get("description", "")
             budget = job.get("budget", "N/A")
             url = job.get("url", "Sem URL")
+            platform = job.get("platform", "upwork")
 
-            proposal = generate_smart_proposal(title, description)
+            # Limite Upwork: 3–5 propostas/dia para manter perfil seguro
+            if platform == "upwork" and upwork_today >= upwork_max:
+                log.info(f"⏸️ Limite Upwork atingido hoje ({upwork_today}/{upwork_max}). Pulando: {title[:50]}...")
+                continue
+
+            skill = get_skill_for_job(title, description)
+            proposal = generate_smart_proposal(title, description, skill=skill)
+
+            platform_label = "Upwork" if platform == "upwork" else platform
             mensagem = (
-                f"🎯 *NOVO LEAD (Via Apify)*\n\n"
+                f"🎯 *NOVO LEAD* ({platform_label})\n\n"
+                f"🛠 *Skill:* {skill.get('name', skill.get('id', '?'))}\n"
                 f"💼 *Vaga:* {title}\n"
                 f"💰 *Orçamento:* {budget}\n"
-                f"🔗 *Link da Vaga:* {url}\n\n"
-                f"📝 *Proposta Gerada pelo Groq:*\n{proposal}\n\n"
-                f"🔗 *Ação:* Vá ao Upwork para copiar e colar!"
+                f"🔗 *Link:* {url}\n\n"
+                f"📝 *Proposta (Groq):*\n{proposal}\n\n"
+                f"🔗 *Ação:* Copiar e colar no site."
             )
             send_telegram(mensagem)
 
-            # Opcional: ativar sniper automático via variável de ambiente
-            if enable_sniper and url.startswith("http"):
+            source_db = "apify_upwork" if platform == "upwork" else f"apify_{platform}"
+            try:
+                save_lead(
+                    name=title[:255] if title else f"{platform_label} Lead",
+                    email="",
+                    phone="",
+                    sector=job.get("category") or platform_label,
+                    location=job.get("client_country") or "",
+                    score=85,
+                    source=source_db,
+                    notes=url or (description[:500] if description else ""),
+                    skill_used=skill.get("id", ""),
+                )
+                log_action("claw_proposal_sent", f"Vaga: {title[:80]} | Skill: {skill.get('id')}")
+            except Exception as db_err:
+                log.warning(f"Não foi possível salvar lead no banco: {db_err}")
+
+            if platform == "upwork":
+                upwork_today += 1
+
+            # Sniper só para Upwork (URL conhecida)
+            if platform == "upwork" and enable_sniper and url.startswith("http"):
                 threading.Thread(
                     target=run_upwork_sniper,
                     args=(url, proposal),
@@ -375,14 +433,40 @@ def login():
 
 @app.route("/api/my-stats", methods=["GET"])
 def my_stats():
-    # Mock estático por enquanto; pode ligar no database.py depois
-    return jsonify({"total_leads": 210, "new_this_week": 25, "emails_sent": 112})
+    """
+    Estatísticas para o painel.
+    Se no futuro houver multi-tenant, podemos ler um user_id do token.
+    Por enquanto, usa agregados globais de leads/emails.
+    """
+    try:
+        # Stats globais
+        global_stats = get_stats()
+        return jsonify(
+            {
+                "total_leads": global_stats.get("leads", 0),
+                "emails_sent": global_stats.get("emails_sent", 0),
+                # Aproximação simples: novos na última semana ~ scans_today
+                "new_this_week": global_stats.get("scans_today", 0),
+            }
+        )
+    except Exception as e:
+        log.error(f"/api/my-stats error: {e}")
+        return jsonify({"total_leads": 0, "new_this_week": 0, "emails_sent": 0}), 500
 
 
 @app.route("/api/my-leads", methods=["GET"])
 def my_leads():
-    # Mock vazio; depois podemos conectar na tabela tenant_leads
-    return jsonify([])
+    """
+    Retorna os leads mais recentes para popular o painel.
+    Por enquanto, retorna leads globais (tabela leads).
+    """
+    try:
+        limit = int(request.args.get("limit", 50))
+        leads = get_leads(limit=limit)
+        return jsonify(leads)
+    except Exception as e:
+        log.error(f"/api/my-leads error: {e}")
+        return jsonify([]), 500
 
 
 @app.route("/health", methods=["GET"])

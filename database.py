@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, text
 log = logging.getLogger(__name__)
 
 def get_db_url():
-    url = os.getenv("DATABASE_URL", "")
+    url = (os.getenv("DATABASE_URL") or "").strip()
     if not url:
         raise ValueError("DATABASE_URL not set")
     if url.startswith("postgres://"):
@@ -37,9 +37,15 @@ def init_db():
                 name VARCHAR(255), email VARCHAR(255), phone VARCHAR(50),
                 sector VARCHAR(100), location VARCHAR(100),
                 score INTEGER DEFAULT 0, status VARCHAR(50) DEFAULT 'novo',
-                source VARCHAR(100), notes TEXT, created_at TIMESTAMP DEFAULT NOW()
+                source VARCHAR(100), notes TEXT, skill_used VARCHAR(100),
+                created_at TIMESTAMP DEFAULT NOW()
             )
         """))
+        try:
+            conn.execute(text("ALTER TABLE leads ADD COLUMN skill_used VARCHAR(100)"))
+        except Exception as e:
+            if "already exists" not in str(e).lower():
+                log.warning(f"ALTER leads.skill_used: {e}")
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS emails_sent (
                 id SERIAL PRIMARY KEY, lead_id INTEGER,
@@ -109,6 +115,20 @@ def get_stats():
         log.error(f"get_stats error: {e}")
         return {"leads": 0, "emails_sent": 0, "scans_today": 0}
 
+def get_upwork_proposals_count_today():
+    """Quantas propostas Upwork já foram enviadas hoje (para respeitar limite 3–5/dia)."""
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            n = conn.execute(text("""
+                SELECT COUNT(*) FROM leads
+                WHERE source = 'apify_upwork' AND created_at::date = CURRENT_DATE
+            """)).scalar()
+            return n or 0
+    except Exception as e:
+        log.error(f"get_upwork_proposals_count_today error: {e}")
+        return 0
+
 def get_leads(limit=50):
     try:
         engine = get_engine()
@@ -144,16 +164,16 @@ def get_tenant_stats(user_id):
         log.error(f"get_tenant_stats error: {e}")
         return {"total_leads": 0, "emails_sent": 0, "new_this_week": 0}
 
-def save_lead(name, email, phone, sector, location, score, source, notes=""):
+def save_lead(name, email, phone, sector, location, score, source, notes="", skill_used=""):
     try:
         engine = get_engine()
         with engine.connect() as conn:
             conn.execute(text("""
-                INSERT INTO leads (name, email, phone, sector, location, score, source, notes)
-                VALUES (:name, :email, :phone, :sector, :location, :score, :source, :notes)
+                INSERT INTO leads (name, email, phone, sector, location, score, source, notes, skill_used)
+                VALUES (:name, :email, :phone, :sector, :location, :score, :source, :notes, :skill_used)
             """), {"name": name, "email": email, "phone": phone,
                   "sector": sector, "location": location,
-                  "score": score, "source": source, "notes": notes})
+                  "score": score, "source": source, "notes": notes, "skill_used": skill_used or None})
             conn.commit()
         return True
     except Exception as e:
