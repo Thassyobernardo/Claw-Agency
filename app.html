@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Claw Agency — Platform</title>
+  <title>Claw Agency — AI Prospecting Platform</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link
     href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Epilogue:wght@300;400;500;600&display=swap"
@@ -14,16 +14,9 @@
       --white: #f7f5f0;
       --ink: #0d0d0d;
       --red: #c0392b;
-      --red2: #e74c3c;
-      --grey: #e8e4de;
-      --grey2: #d4cfc8;
-      --muted: #8a8580;
-      --warm: #f0ebe3;
       --border: #ddd9d3;
-      --green: #1a7a5e;
-      --green-bg: #edf7f3;
-      --yellow: #a06000;
-      --yellow-bg: #fef9ed;
+      --warm: #f0ebe3;
+      --muted: #8a8580;
     }
 
     *,
@@ -34,27 +27,12 @@
       box-sizing: border-box;
     }
 
-    html {
-      scroll-behavior: smooth;
-    }
-
     body {
       background: var(--white);
       color: var(--ink);
       font-family: 'Epilogue', sans-serif;
       font-weight: 300;
       min-height: 100vh;
-      overflow-x: hidden;
-    }
-
-    body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-      pointer-events: none;
-      z-index: 9999;
-      opacity: 0.35;
     }
 
     .screen {
@@ -66,374 +44,22 @@
       display: block;
     }
 
-    #auth-screen.active,
-    #onboarding-screen.active {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    #auth-screen {
-      background: var(--white);
-      position: relative;
-    }
-
-    #auth-screen::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: radial-gradient(ellipse at 30% 40%, rgba(192, 57, 43, 0.06) 0%, transparent 60%);
-      pointer-events: none;
-    }
-
-    .auth-wrap {
-      width: 100%;
-      max-width: 460px;
-      padding: 48px 40px;
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      position: relative;
-      box-shadow: 0 4px 32px rgba(0, 0, 0, 0.06);
-    }
-
-    .auth-wrap::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: var(--red);
-    }
-
-    .auth-logo {
-      font-family: 'Clash Display', sans-serif;
-      font-size: 20px;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      margin-bottom: 6px;
-    }
-
-    .auth-logo span {
-      color: var(--red);
-    }
-
-    .auth-tagline {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 36px;
-      letter-spacing: 0.03em;
-    }
-
-    .auth-tabs {
-      display: flex;
-      margin-bottom: 32px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .auth-tab {
-      flex: 1;
-      padding: 10px 0;
-      text-align: center;
-      font-family: 'Epilogue', sans-serif;
-      font-size: 13px;
-      font-weight: 500;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      cursor: pointer;
-      color: var(--muted);
-      border-bottom: 2px solid transparent;
-      margin-bottom: -1px;
-      transition: all 0.2s;
-    }
-
-    .auth-tab.active {
-      color: var(--ink);
-      border-bottom-color: var(--red);
-    }
-
-    .auth-form {
-      display: none;
-      flex-direction: column;
-      gap: 20px;
-    }
-
-    .auth-form.active {
-      display: flex;
-    }
-
-    .field label {
-      display: block;
-      font-size: 11px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 7px;
-      font-weight: 500;
-    }
-
-    .field input {
-      width: 100%;
-      padding: 12px 14px;
-      background: var(--warm);
-      border: 1px solid var(--border);
-      border-radius: 2px;
-      color: var(--ink);
-      font-family: 'Epilogue', sans-serif;
-      font-size: 14px;
-      font-weight: 300;
-      transition: border 0.2s;
-      outline: none;
-    }
-
-    .field input:focus {
-      border-color: var(--red);
-      background: var(--white);
-    }
-
-    .field input::placeholder {
-      color: var(--muted);
-    }
-
-    .btn-primary {
-      width: 100%;
-      padding: 14px;
-      background: var(--ink);
-      border: none;
-      border-radius: 2px;
-      color: var(--white);
-      font-family: 'Epilogue', sans-serif;
-      font-size: 13px;
-      font-weight: 500;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    .btn-primary:hover {
-      background: var(--red);
-    }
-
-    .btn-primary:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-    }
-
-    .auth-error {
-      color: var(--red);
-      font-size: 13px;
-      padding: 10px 14px;
-      background: rgba(192, 57, 43, 0.06);
-      border: 1px solid rgba(192, 57, 43, 0.2);
-      border-radius: 2px;
-      display: none;
-    }
-
-    .auth-error.show {
-      display: block;
-    }
-
-    #onboarding-screen {
-      background: var(--white);
-    }
-
-    .ob-wrap {
-      width: 100%;
-      max-width: 540px;
-      padding: 52px 44px;
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      box-shadow: 0 4px 32px rgba(0, 0, 0, 0.06);
-      position: relative;
-    }
-
-    .ob-wrap::before {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: var(--red);
-    }
-
-    .ob-step-bar {
-      display: flex;
-      gap: 6px;
-      margin-bottom: 40px;
-    }
-
-    .ob-step-dot {
-      height: 3px;
-      flex: 1;
-      background: var(--grey);
-      border-radius: 2px;
-      transition: background 0.3s;
-    }
-
-    .ob-step-dot.active {
-      background: var(--red);
-    }
-
-    .ob-step-dot.done {
-      background: var(--ink);
-    }
-
-    .ob-step {
-      display: none;
-    }
-
-    .ob-step.active {
-      display: block;
-    }
-
-    .ob-step-num {
-      font-size: 11px;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 8px;
-      font-weight: 500;
-    }
-
-    .ob-title {
-      font-family: 'Clash Display', sans-serif;
-      font-size: 26px;
-      font-weight: 600;
-      margin-bottom: 6px;
-      letter-spacing: -0.3px;
-    }
-
-    .ob-sub {
-      color: var(--muted);
-      font-size: 14px;
-      margin-bottom: 28px;
-    }
-
-    .tag-grid {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-bottom: 28px;
-    }
-
-    .tag-btn {
-      padding: 9px 18px;
-      border: 1px solid var(--border);
-      border-radius: 2px;
-      background: var(--warm);
-      color: var(--muted);
-      font-family: 'Epilogue', sans-serif;
-      font-size: 13px;
-      font-weight: 400;
-      cursor: pointer;
-      transition: all 0.18s;
-    }
-
-    .tag-btn:hover {
-      border-color: var(--red);
-      color: var(--ink);
-    }
-
-    .tag-btn.selected {
-      border-color: var(--red);
-      background: rgba(192, 57, 43, 0.06);
-      color: var(--red);
-      font-weight: 500;
-    }
-
-    .ob-input {
-      width: 100%;
-      padding: 13px 16px;
-      margin-bottom: 12px;
-      background: var(--warm);
-      border: 1px solid var(--border);
-      border-radius: 2px;
-      color: var(--ink);
-      font-family: 'Epilogue', sans-serif;
-      font-size: 15px;
-      outline: none;
-      transition: border 0.2s;
-    }
-
-    .ob-input:focus {
-      border-color: var(--red);
-      background: var(--white);
-    }
-
-    .lang-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 28px;
-    }
-
-    .lang-card {
-      padding: 16px 18px;
-      border: 1px solid var(--border);
-      border-radius: 2px;
-      background: var(--warm);
-      cursor: pointer;
-      transition: all 0.18s;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .lang-card:hover {
-      border-color: var(--red);
-    }
-
-    .lang-card.selected {
-      border-color: var(--red);
-      background: rgba(192, 57, 43, 0.06);
-    }
-
-    .lang-flag {
-      font-size: 22px;
-    }
-
-    .lang-name {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--ink);
-    }
-
-    #app-screen {
-      display: none;
-    }
-
     #app-screen.active {
       display: flex;
-      min-height: 100vh;
     }
 
     .sidebar {
       width: 248px;
-      min-height: 100vh;
       background: var(--white);
       border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
       position: fixed;
-      top: 0;
-      left: 0;
-      bottom: 0;
-      z-index: 100;
+      height: 100vh;
     }
 
     .sidebar-logo {
-      padding: 28px 24px 20px;
+      padding: 28px 24px;
       font-family: 'Clash Display', sans-serif;
-      font-size: 17px;
       font-weight: 700;
-      letter-spacing: 0.05em;
       border-bottom: 1px solid var(--border);
     }
 
@@ -441,25 +67,8 @@
       color: var(--red);
     }
 
-    .sidebar-plan {
-      margin: 14px 20px;
-      padding: 8px 14px;
-      background: rgba(192, 57, 43, 0.06);
-      border: 1px solid rgba(192, 57, 43, 0.2);
-      border-radius: 2px;
-      font-size: 11px;
-      color: var(--red);
-      font-weight: 500;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
     .sidebar-nav {
-      flex: 1;
       padding: 8px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
     }
 
     .nav-item {
@@ -467,72 +76,15 @@
       align-items: center;
       gap: 12px;
       padding: 11px 12px;
-      border-radius: 2px;
       cursor: pointer;
       font-size: 13px;
-      font-weight: 400;
-      letter-spacing: 0.03em;
       color: var(--muted);
-      transition: all 0.15s;
-    }
-
-    .nav-item:hover {
-      background: var(--warm);
-      color: var(--ink);
     }
 
     .nav-item.active {
       background: var(--warm);
       color: var(--ink);
       border-left: 2px solid var(--red);
-      padding-left: 10px;
-    }
-
-    .nav-icon {
-      font-size: 15px;
-      width: 18px;
-      text-align: center;
-    }
-
-    .sidebar-bottom {
-      padding: 20px 24px;
-      border-top: 1px solid var(--border);
-    }
-
-    .sidebar-user-name {
-      font-size: 14px;
-      font-weight: 500;
-      margin-bottom: 2px;
-    }
-
-    .sidebar-user-email {
-      font-size: 12px;
-      color: var(--muted);
-      margin-bottom: 14px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .btn-logout {
-      width: 100%;
-      padding: 9px;
-      background: transparent;
-      border: 1px solid var(--border);
-      border-radius: 2px;
-      color: var(--muted);
-      font-family: 'Epilogue', sans-serif;
-      font-size: 11px;
-      font-weight: 500;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-
-    .btn-logout:hover {
-      border-color: var(--red);
-      color: var(--red);
     }
 
     .main {
@@ -547,204 +99,6 @@
 
     .panel.active {
       display: block;
-    }
-
-    .page-eyebrow {
-      font-size: 11px;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 8px;
-      font-weight: 500;
-    }
-
-    .page-title {
-      font-family: 'Clash Display', sans-serif;
-      font-size: 28px;
-      font-weight: 600;
-      letter-spacing: -0.3px;
-      margin-bottom: 4px;
-    }
-
-    .page-sub {
-      color: var(--muted);
-      font-size: 14px;
-      margin-bottom: 36px;
-    }
-
-    .stats-row {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-      margin-bottom: 32px;
-    }
-
-    .stat-box {
-      padding: 24px;
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 2px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .stat-box::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-    }
-
-    .stat-box.s-red::after {
-      background: var(--red);
-    }
-
-    .stat-box.s-ink::after {
-      background: var(--ink);
-    }
-
-    .stat-box.s-grey::after {
-      background: var(--grey2);
-    }
-
-    .stat-label {
-      font-size: 11px;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 10px;
-      font-weight: 500;
-    }
-
-    .stat-number {
-      font-family: 'Clash Display', sans-serif;
-      font-size: 36px;
-      font-weight: 600;
-      letter-spacing: -1px;
-    }
-
-    .stat-number.s-red {
-      color: var(--red);
-    }
-
-    .stat-caption {
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 4px;
-    }
-
-    .card {
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 2px;
-      overflow: hidden;
-      margin-bottom: 24px;
-    }
-
-    .card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 22px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .card-title {
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: 0.02em;
-    }
-
-    .chip {
-      padding: 3px 10px;
-      font-size: 11px;
-      font-weight: 500;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      background: var(--warm);
-      border: 1px solid var(--border);
-      border-radius: 2px;
-      color: var(--muted);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
-
-    thead th {
-      padding: 11px 22px;
-      text-align: left;
-      font-size: 10px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--muted);
-      border-bottom: 1px solid var(--border);
-      font-weight: 500;
-      background: var(--warm);
-    }
-
-    tbody td {
-      padding: 14px 22px;
-      font-size: 13px;
-      border-bottom: 1px solid var(--grey);
-    }
-
-    tbody tr:last-child td {
-      border-bottom: none;
-    }
-
-    tbody tr:hover td {
-      background: var(--warm);
-    }
-
-    .pill {
-      display: inline-block;
-      padding: 3px 8px;
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      border-radius: 2px;
-    }
-
-    .pill-novo {
-      background: var(--yellow-bg);
-      color: var(--yellow);
-      border: 1px solid rgba(160, 96, 0, 0.2);
-    }
-
-    .pill-contactado {
-      background: rgba(192, 57, 43, 0.08);
-      color: var(--red);
-      border: 1px solid rgba(192, 57, 43, 0.2);
-    }
-
-    .pill-convertido {
-      background: var(--green-bg);
-      color: var(--green);
-      border: 1px solid rgba(26, 122, 94, 0.2);
-    }
-
-    .empty {
-      text-align: center;
-      padding: 56px 24px;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .empty-icon {
-      font-size: 36px;
-      margin-bottom: 12px;
-    }
-
-    .empty-title {
-      font-family: 'Clash Display', sans-serif;
-      font-size: 18px;
-      color: var(--ink);
-      margin-bottom: 6px;
     }
 
     .cfg-grid {
@@ -765,10 +119,9 @@
       letter-spacing: 0.12em;
       text-transform: uppercase;
       color: var(--muted);
-      font-weight: 500;
       margin-bottom: 20px;
-      padding-bottom: 12px;
       border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
     }
 
     .cfg-field {
@@ -778,40 +131,26 @@
     .cfg-field label {
       display: block;
       font-size: 11px;
-      letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--muted);
       margin-bottom: 6px;
-      font-weight: 500;
     }
 
     .cfg-field input,
     .cfg-field select,
     .cfg-field textarea {
       width: 100%;
-      padding: 11px 13px;
+      padding: 11px;
       background: var(--warm);
       border: 1px solid var(--border);
-      border-radius: 2px;
-      color: var(--ink);
-      font-family: 'Epilogue', sans-serif;
+      font-family: inherit;
       font-size: 13px;
       outline: none;
-      transition: border 0.2s;
-    }
-
-    .cfg-field input:focus,
-    .cfg-field select:focus,
-    .cfg-field textarea:focus {
-      border-color: var(--red);
-      background: var(--white);
     }
 
     .cfg-field textarea {
-      resize: vertical;
       min-height: 120px;
-      font-family: 'Epilogue', sans-serif;
-      line-height: 1.5;
+      resize: vertical;
     }
 
     .skill-badge {
@@ -825,1292 +164,95 @@
     }
 
     .btn-save {
-      padding: 11px 28px;
+      padding: 12px 28px;
       background: var(--ink);
+      color: white;
       border: none;
-      border-radius: 2px;
-      color: var(--white);
-      font-family: 'Epilogue', sans-serif;
-      font-size: 12px;
-      font-weight: 500;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
       cursor: pointer;
-      transition: background 0.2s;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      transition: 0.2s;
     }
 
     .btn-save:hover {
       background: var(--red);
     }
-
-    .pricing-row {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 20px;
-    }
-
-    .price-card {
-      padding: 32px;
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 2px;
-      position: relative;
-      transition: border 0.2s;
-    }
-
-    .price-card.popular {
-      border-color: var(--red);
-      border-width: 1.5px;
-    }
-
-    .popular-label {
-      position: absolute;
-      top: -11px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: var(--red);
-      color: #fff;
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      padding: 3px 16px;
-      border-radius: 2px;
-    }
-
-    .price-plan-name {
-      font-size: 11px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: var(--muted);
-      font-weight: 500;
-      margin-bottom: 16px;
-    }
-
-    .price-big {
-      font-family: 'Clash Display', sans-serif;
-      font-size: 42px;
-      font-weight: 600;
-      letter-spacing: -2px;
-      margin-bottom: 4px;
-    }
-
-    .price-big sup {
-      font-size: 20px;
-      letter-spacing: 0;
-      vertical-align: super;
-    }
-
-    .price-big sub {
-      font-size: 14px;
-      letter-spacing: 0;
-      font-family: 'Epilogue', sans-serif;
-      color: var(--muted);
-      font-weight: 300;
-    }
-
-    .price-desc {
-      font-size: 13px;
-      color: var(--muted);
-      margin-bottom: 24px;
-    }
-
-    .price-features {
-      list-style: none;
-      margin-bottom: 28px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .price-features li {
-      font-size: 13px;
-      display: flex;
-      gap: 10px;
-      color: var(--muted);
-    }
-
-    .price-features li::before {
-      content: '—';
-      color: var(--red);
-      font-weight: 500;
-      flex-shrink: 0;
-    }
-
-    .btn-plan {
-      width: 100%;
-      padding: 12px;
-      border-radius: 2px;
-      font-family: 'Epilogue', sans-serif;
-      font-size: 12px;
-      font-weight: 500;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: all 0.2s;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--ink);
-    }
-
-    .btn-plan:hover {
-      background: var(--ink);
-      color: var(--white);
-      border-color: var(--ink);
-    }
-
-    .btn-plan.popular-btn {
-      background: var(--red);
-      border-color: var(--red);
-      color: #fff;
-    }
-
-    .btn-plan.popular-btn:hover {
-      background: var(--ink);
-      border-color: var(--ink);
-    }
-
-    .toast {
-      position: fixed;
-      bottom: 28px;
-      right: 28px;
-      padding: 13px 20px;
-      background: var(--ink);
-      color: var(--white);
-      border-radius: 2px;
-      font-size: 13px;
-      z-index: 9999;
-      transform: translateY(60px);
-      opacity: 0;
-      transition: all 0.28s;
-      pointer-events: none;
-      border-left: 3px solid var(--red);
-    }
-
-    .toast.show {
-      transform: translateY(0);
-      opacity: 1;
-    }
-
-    .toast.t-success {
-      border-left-color: var(--green);
-    }
-
-    .toast.t-error {
-      border-left-color: var(--red);
-    }
-
-    .loader {
-      display: inline-block;
-      width: 14px;
-      height: 14px;
-      border: 2px solid rgba(0, 0, 0, 0.2);
-      border-top-color: var(--ink);
-      border-radius: 50%;
-      animation: spin 0.6s linear infinite;
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    /* ── LANGUAGE DROPDOWN ── */
-    .lang-dropdown-wrap {
-      position: relative;
-      padding: 12px 16px;
-      border-top: 1px solid var(--border);
-    }
-
-    .lang-dropdown-btn {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      width: 100%;
-      padding: 9px 12px;
-      background: var(--warm);
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      font-family: 'Epilogue', sans-serif;
-      font-size: 13px;
-      font-weight: 500;
-      color: var(--ink);
-      cursor: pointer;
-      transition: all 0.15s;
-      letter-spacing: 0.02em;
-    }
-
-    .lang-dropdown-btn:hover {
-      border-color: var(--ink);
-      background: var(--white);
-    }
-
-    .lang-dropdown-btn svg {
-      margin-left: auto;
-      color: var(--muted);
-      transition: transform 0.2s;
-    }
-
-    .lang-dropdown-btn.open svg {
-      transform: rotate(180deg);
-    }
-
-    .lang-dropdown-menu {
-      display: none;
-      position: absolute;
-      bottom: calc(100% - 12px);
-      left: 16px;
-      right: 16px;
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 3px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.10);
-      z-index: 200;
-      overflow: hidden;
-    }
-
-    .lang-dropdown-menu.open {
-      display: block;
-    }
-
-    .lang-opt {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      font-size: 13px;
-      color: var(--muted);
-      cursor: pointer;
-      transition: background 0.12s;
-      font-family: 'Epilogue', sans-serif;
-    }
-
-    .lang-opt:hover {
-      background: var(--warm);
-      color: var(--ink);
-    }
-
-    .lang-opt.active {
-      color: var(--ink);
-      font-weight: 500;
-      background: var(--warm);
-    }
-
-    .lang-opt.active::after {
-      content: '✓';
-      margin-left: auto;
-      color: var(--red);
-      font-size: 12px;
-    }
   </style>
 </head>
 
 <body>
-
-  <div id="auth-screen" class="screen active">
-    <div class="auth-wrap">
-      <div class="auth-logo">CLAW <span>AGENCY</span></div>
-      <div class="auth-tagline" data-i18n="auth_tagline">Automation Intelligence Platform</div>
-      <div class="auth-tabs">
-        <div class="auth-tab active" onclick="switchTab('login')" data-i18n="auth_login">Login</div>
-        <div class="auth-tab" onclick="switchTab('register')" data-i18n="auth_register">Criar conta</div>
-      </div>
-      <div id="login-form" class="auth-form active">
-        <div class="field"><label data-i18n="auth_email">Email</label><input type="email" id="login-email"
-            data-i18n-ph="auth_ph_email" placeholder="tu@empresa.com"></div>
-        <div class="field"><label data-i18n="auth_password">Password</label><input type="password" id="login-pass"
-            data-i18n-ph="auth_ph_pass" placeholder="••••••••"></div>
-        <div id="login-error" class="auth-error"></div>
-        <button class="btn-primary" onclick="doLogin()" data-i18n="auth_login_btn">Entrar →</button>
-      </div>
-      <div id="register-form" class="auth-form">
-        <div class="field"><label data-i18n="auth_name">Nome</label><input type="text" id="reg-name"
-            data-i18n-ph="auth_ph_name" placeholder="O teu nome"></div>
-        <div class="field"><label data-i18n="auth_company">Empresa</label><input type="text" id="reg-company"
-            data-i18n-ph="auth_ph_company" placeholder="Nome da empresa">
-        </div>
-        <div class="field"><label data-i18n="auth_email">Email</label><input type="email" id="reg-email"
-            data-i18n-ph="auth_ph_email" placeholder="tu@empresa.com"></div>
-        <div class="field"><label data-i18n="auth_password">Password</label><input type="password" id="reg-pass"
-            data-i18n-ph="auth_ph_pass_min" placeholder="Mínimo 8 caracteres"></div>
-        <div id="reg-error" class="auth-error"></div>
-        <button class="btn-primary" onclick="doRegister()" data-i18n="auth_register_btn">Criar conta grátis →</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="onboarding-screen" class="screen">
-    <div class="ob-wrap">
-      <div class="ob-step-bar">
-        <div class="ob-step-dot active" id="sdot-0"></div>
-        <div class="ob-step-dot" id="sdot-1"></div>
-        <div class="ob-step-dot" id="sdot-2"></div>
-      </div>
-      <div class="ob-step active" id="ob-0">
-        <div class="ob-step-num"><span data-i18n="ob_step">Passo</span> 01 / 03</div>
-        <div class="ob-title" data-i18n="ob_step1_title">Qual é o teu sector?</div>
-        <div class="ob-sub" data-i18n="ob_step1_sub">O agente vai procurar leads específicos para o teu nicho</div>
-        <div class="tag-grid">
-          <button class="tag-btn" onclick="pickTag(this,'sector','Clínicas Dentárias')">🦷 <span
-              data-i18n="dental">Clínicas Dentárias</span></button>
-          <button class="tag-btn" onclick="pickTag(this,'sector','Imobiliário')">🏠 <span
-              data-i18n="real_estate">Imobiliário</span></button>
-          <button class="tag-btn" onclick="pickTag(this,'sector','Restaurantes')">🍽️ <span
-              data-i18n="restaurants">Restaurantes</span></button>
-          <button class="tag-btn" onclick="pickTag(this,'sector','Advogados')">⚖️ <span
-              data-i18n="lawyers">Advogados</span></button>
-          <button class="tag-btn" onclick="pickTag(this,'sector','Consultoria')">📊 <span
-              data-i18n="consulting">Consultoria</span></button>
-          <button class="tag-btn" onclick="pickTag(this,'sector','Saúde')">💊 <span
-              data-i18n="health">Saúde</span></button>
-          <button class="tag-btn" onclick="pickTag(this,'sector','E-commerce')">🛒 <span
-              data-i18n="ecommerce">E-commerce</span></button>
-          <button class="tag-btn" onclick="pickTag(this,'sector','Outro')">➕ <span
-              data-i18n="other">Outro</span></button>
-        </div>
-        <button class="btn-primary" onclick="goStep(1)" data-i18n="ob_continue">Continuar →</button>
-      </div>
-      <div class="ob-step" id="ob-1">
-        <div class="ob-step-num"><span data-i18n="ob_step">Passo</span> 02 / 03</div>
-        <div class="ob-title" data-i18n="ob_step2_title">Onde procuras clientes?</div>
-        <div class="ob-sub" data-i18n="ob_step2_sub">País ou cidade onde o agente vai fazer prospeção</div>
-        <input type="text" class="ob-input" id="ob-loc" data-i18n-ph="ob_step2_ph"
-          placeholder="ex: Luxembourg, Paris, Lisboa...">
-        <div class="tag-grid">
-          <button class="tag-btn" onclick="document.getElementById('ob-loc').value='Luxembourg'">🇱🇺
-            Luxembourg</button>
-          <button class="tag-btn" onclick="document.getElementById('ob-loc').value='Paris, France'">🇫🇷 Paris</button>
-          <button class="tag-btn" onclick="document.getElementById('ob-loc').value='Lisboa, Portugal'">🇵🇹
-            Lisboa</button>
-          <button class="tag-btn" onclick="document.getElementById('ob-loc').value='Bruxelles'">🇧🇪 Bruxelas</button>
-        </div>
-        <button class="btn-primary" onclick="goStep(2)" data-i18n="ob_continue">Continuar →</button>
-      </div>
-      <div class="ob-step" id="ob-2">
-        <div class="ob-step-num"><span data-i18n="ob_step">Passo</span> 03 / 03</div>
-        <div class="ob-title" data-i18n="ob_step3_title">Idioma dos emails?</div>
-        <div class="ob-sub" data-i18n="ob_step3_sub">O agente envia outreach neste idioma automaticamente</div>
-        <div class="lang-grid">
-          <div class="lang-card" onclick="pickLang(this,'fr')"><span class="lang-flag">🇫🇷</span><span
-              class="lang-name">Français</span></div>
-          <div class="lang-card" onclick="pickLang(this,'en')"><span class="lang-flag">🇬🇧</span><span
-              class="lang-name">English</span></div>
-          <div class="lang-card" onclick="pickLang(this,'pt')"><span class="lang-flag">🇵🇹</span><span
-              class="lang-name">Português</span></div>
-          <div class="lang-card" onclick="pickLang(this,'lu')"><span class="lang-flag">🇱🇺</span><span
-              class="lang-name">Lëtzebuergesch</span></div>
-        </div>
-        <button class="btn-primary" id="ob-finish-btn" onclick="finishOnboarding()" data-i18n="ob_launch">Lançar o meu
-          agente →</button>
-      </div>
-    </div>
-  </div>
-
-  <div id="app-screen" class="screen">
+  <div id="app-screen" class="screen active">
     <div class="sidebar">
       <div class="sidebar-logo">CLAW <span>AGENCY</span></div>
-      <div class="sidebar-plan" id="sidebar-plan">Trial</div>
       <nav class="sidebar-nav">
-        <div class="nav-item active" onclick="openPanel('dashboard',this)"><span class="nav-icon">◈</span> <span
-            data-i18n="nav_dashboard">Dashboard</span></div>
-        <div class="nav-item" onclick="openPanel('leads',this)"><span class="nav-icon">◎</span> <span
-            data-i18n="nav_leads">Leads</span></div>
-        <div class="nav-item" onclick="openPanel('agent',this)"><span class="nav-icon">◉</span> <span
-            data-i18n="nav_agent">Agent Config</span></div>
-        <div class="nav-item" onclick="openPanel('pricing',this)"><span class="nav-icon">◇</span> <span
-            data-i18n="nav_plans">Pricing</span></div>
+        <div class="nav-item active" onclick="openPanel('dashboard',this)">◈ Dashboard</div>
+        <div class="nav-item" onclick="openPanel('leads',this)">◎ Leads</div>
+        <div class="nav-item" onclick="openPanel('agent',this)">◉ Agent Config</div>
+        <div class="nav-item" onclick="openPanel('pricing',this)">◇ Pricing</div>
       </nav>
-      <div class="lang-dropdown-wrap">
-        <button class="lang-dropdown-btn" onclick="toggleLangMenu(event)" id="lang-btn">
-          <span id="lang-flag-current">🇬🇧</span>
-          <span id="lang-label-current">EN</span>
-          <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
-            <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          </svg>
-        </button>
-        <div class="lang-dropdown-menu" id="lang-menu">
-          <div class="lang-opt" onclick="setLang('en')" data-lang="en"><span>🇬🇧</span> English</div>
-          <div class="lang-opt" onclick="setLang('pt')" data-lang="pt"><span>🇵🇹</span> Português</div>
-          <div class="lang-opt" onclick="setLang('fr')" data-lang="fr"><span>🇫🇷</span> Français</div>
-          <div class="lang-opt" onclick="setLang('de')" data-lang="de"><span>🇩🇪</span> Deutsch</div>
-          <div class="lang-opt" onclick="setLang('es')" data-lang="es"><span>🇪🇸</span> Español</div>
-        </div>
-      </div>
-      <div class="sidebar-bottom">
-        <div class="sidebar-user-name" id="sb-name">–</div>
-        <div class="sidebar-user-email" id="sb-email">–</div>
-        <button class="btn-logout" onclick="doLogout()" data-i18n="nav_logout">Sair</button>
-      </div>
     </div>
     <div class="main">
-      <div id="panel-dashboard" class="panel active">
-        <div class="page-eyebrow" data-i18n="db_eyebrow">Overview</div>
-        <div class="page-title" data-i18n="nav_dashboard">Dashboard</div>
-        <div class="page-sub" data-i18n="db_subtitle">O teu agente trabalha enquanto dormes</div>
-        <div class="stats-row">
-          <div class="stat-box s-red">
-            <div class="stat-label" data-i18n="db_total_leads">Total Leads</div>
-            <div class="stat-number s-red" id="s-leads">—</div>
-            <div class="stat-caption" data-i18n="db_total_leads_cap">capturados pelo agente</div>
-          </div>
-          <div class="stat-box s-ink">
-            <div class="stat-label" data-i18n="db_this_week">Esta Semana</div>
-            <div class="stat-number" id="s-week">—</div>
-            <div class="stat-caption" data-i18n="db_this_week_cap">novos leads</div>
-          </div>
-          <div class="stat-box s-grey">
-            <div class="stat-label" data-i18n="db_emails_sent">Emails Enviados</div>
-            <div class="stat-number" id="s-emails">—</div>
-            <div class="stat-caption" data-i18n="db_emails_sent_cap">outreach automático</div>
-          </div>
-        </div>
-        <div class="card">
-          <div class="card-header"><span class="card-title" data-i18n="db_recent_leads">Leads Recentes</span><span
-              class="chip" id="chip-leads">0</span></div>
-          <div id="tbl-preview"></div>
-        </div>
-      </div>
-      <div id="panel-leads" class="panel">
-        <div class="page-eyebrow" data-i18n="leads_eyebrow">Base de dados</div>
-        <div class="page-title" data-i18n="nav_leads">Leads</div>
-        <div class="page-sub" data-i18n="leads_subtitle">Todos os contactos encontrados pelo teu agente</div>
-        <div class="card">
-          <div class="card-header"><span class="card-title" data-i18n="leads_contacts">Contactos</span><span
-              class="chip" id="chip-all">0</span>
-          </div>
-          <div id="tbl-full"></div>
-        </div>
-      </div>
-      <div id="panel-agent" class="panel">
-        <div class="page-eyebrow" data-i18n="agent_eyebrow">Configuration</div>
-        <div class="page-title" data-i18n="agent_title">AI Hunting Skill</div>
-        <div class="page-sub" data-i18n="agent_subtitle">Configure the "brain" of your agent for personalized outreach
-        </div>
-
+      <div id="panel-agent" class="panel active">
         <div class="cfg-grid">
           <div class="cfg-card">
-            <div class="cfg-card-title" data-i18n="agent_prospecting">Targeting</div>
-            <div class="cfg-field"><label data-i18n="agent_label_sector">Target Sector</label><input type="text"
-                id="cfg-sector" placeholder="e.g. Dental Clinics"></div>
-            <div class="cfg-field"><label data-i18n="agent_label_location">Location</label><input type="text"
-                id="cfg-location" placeholder="e.g. Luxembourg"></div>
+            <div class="cfg-card-title">Targeting</div>
+            <div class="cfg-field"><label>Target Sector</label><input type="text" id="cfg-sector"
+                placeholder="e.g. Dental Clinics"></div>
+            <div class="cfg-field"><label>Location</label><input type="text" id="cfg-location"
+                placeholder="e.g. Luxembourg"></div>
           </div>
-
           <div class="cfg-card">
-            <div class="cfg-card-title" data-i18n="agent_outreach">Outreach Settings</div>
-            <div class="cfg-field"><label data-i18n="agent_label_lang">Language</label><select id="cfg-lang">
+            <div class="cfg-card-title">Outreach Settings</div>
+            <div class="cfg-field"><label>Language</label><select id="cfg-lang">
                 <option value="en">English</option>
                 <option value="fr">Français</option>
                 <option value="pt">Português</option>
               </select></div>
-            <div class="cfg-field"><label data-i18n="agent_label_reply">Reply-to Email</label><input type="email"
-                id="cfg-reply" placeholder="bernardo@clawagency.online"></div>
+            <div class="cfg-field"><label>Reply-to Email</label><input type="email" id="cfg-reply"
+                placeholder="bernardo@clawagency.online"></div>
           </div>
-
-          <div class="cfg-card" style="grid-column:1/-1">
+          <div class="cfg-card" style="grid-column: 1/-1">
             <div class="cfg-card-title">AI Adaptive Writing Skill <span class="skill-badge">ADVANCED</span></div>
             <div class="cfg-field">
-              <label>Custom Instructions for the Agent</label>
+              <label>Custom Instructions (The Agent's Brain)</label>
               <textarea id="cfg-instructions"
-                placeholder="Example: Be professional but aggressive. Mention that we are based in Luxembourg. Focus on how our AI can fill their empty appointment slots..."></textarea>
-              <small style="color: var(--muted); font-size: 11px;">O Claw analisará o website do lead e usará estas
-                instruções para criar uma proposta única.</small>
+                placeholder="Example: Be professional but direct. Mention we are in Luxembourg. Focus on how our AI saves 10 hours of prospecting weekly..."></textarea>
             </div>
-            <button class="btn-save" onclick="saveConfig()" data-i18n="agent_save">Save & Sync Agent</button>
-          </div>
-        </div>
-      </div>
-      <div id="panel-pricing" class="panel">
-        <div class="page-eyebrow" data-i18n="plans_eyebrow">Subscrição</div>
-        <div class="page-title" data-i18n="plans_title">Planos</div>
-        <div class="page-sub" data-i18n="plans_subtitle">Escolhe o plano certo para o teu negócio</div>
-        <div class="pricing-row">
-          <div class="price-card">
-            <div class="price-plan-name">Starter</div>
-            <div class="price-big"><sup>€</sup>297<sub data-i18n="plans_month">/mês</sub></div>
-            <div class="price-desc" data-i18n="plans_starter_desc">Para começar sem risco</div>
-            <ul class="price-features">
-              <li data-i18n="plans_feature_1agent">1 Agente IA configurado</li>
-              <li data-i18n="plans_feature_100leads">100 leads por mês</li>
-              <li data-i18n="plans_feature_emails">Emails automáticos</li>
-              <li data-i18n="plans_feature_telegram">Relatório Telegram diário</li>
-              <li data-i18n="plans_feature_support">Suporte por email</li>
-            </ul>
-            <button class="btn-plan" onclick="choosePlan('starter')" data-i18n="plans_starter_btn">Escolher
-              Starter</button>
-          </div>
-          <div class="price-card popular">
-            <div class="popular-label" data-i18n="plans_popular">Popular</div>
-            <div class="price-plan-name">Growth</div>
-            <div class="price-big"><sup>€</sup>597<sub data-i18n="plans_month">/mês</sub></div>
-            <div class="price-desc" data-i18n="plans_growth_desc">Para acelerar a sério</div>
-            <ul class="price-features">
-              <li data-i18n="plans_feature_3agents">3 Agentes IA configurados</li>
-              <li data-i18n="plans_feature_500leads">500 leads por mês</li>
-              <li data-i18n="plans_feature_multi">Sequências multicanal</li>
-              <li data-i18n="plans_feature_dash">Dashboard personalizado</li>
-              <li data-i18n="plans_feature_prio">Suporte prioritário 24/7</li>
-            </ul>
-            <button class="btn-plan popular-btn" onclick="choosePlan('growth')" data-i18n="plans_growth_btn">Escolher
-              Growth</button>
-          </div>
-          <div class="price-card">
-            <div class="price-plan-name">Enterprise</div>
-            <div class="price-big"><sup>€</sup>997<sub data-i18n="plans_month">/mês</sub></div>
-            <div class="price-desc" data-i18n="plans_ent_desc">Solução completa à medida</div>
-            <ul class="price-features">
-              <li data-i18n="plans_feature_unlimit">Agentes ilimitados</li>
-              <li data-i18n="plans_feature_unleads">Leads ilimitados</li>
-              <li data-i18n="plans_feature_crm">Integração CRM completa</li>
-              <li data-i18n="plans_feature_manager">Gestor de conta dedicado</li>
-              <li data-i18n="plans_feature_api">API dedicada + White-label</li>
-            </ul>
-            <button class="btn-plan" onclick="choosePlan('enterprise')" data-i18n="plans_ent_btn">Escolher
-              Enterprise</button>
+            <button class="btn-save" onclick="saveConfig()">Save & Sync Skill</button>
           </div>
         </div>
       </div>
     </div>
   </div>
-
-  <div class="toast" id="toast"></div>
-
   <script>
-    const API = 'https://claw-agency-production.up.railway.app';
-    const TRANSLATIONS = {
-      en: {
-        auth_tagline: "Automation Intelligence Platform",
-        auth_login: "Login",
-        auth_register: "Create account",
-        auth_email: "Email",
-        auth_password: "Password",
-        auth_name: "Name",
-        auth_company: "Company",
-        auth_login_btn: "Login →",
-        auth_register_btn: "Create free account →",
-        auth_ph_email: "you@company.com",
-        auth_ph_pass: "••••••••",
-        auth_ph_name: "Your name",
-        auth_ph_company: "Company name",
-        auth_ph_pass_min: "Minimum 8 characters",
-        auth_err_fields: "Fill all fields",
-        auth_err_pass: "Password minimum 8 characters",
-        auth_err_conn: "Server connection error",
-        ob_step: "Step",
-        ob_step1_title: "What is your sector?",
-        ob_step1_sub: "The agent will find specific leads for your niche",
-        ob_step2_title: "Where are you looking for clients?",
-        ob_step2_sub: "Country or city where the agent will prospect",
-        ob_step2_ph: "ex: Luxembourg, Paris, London...",
-        ob_step3_title: "Email language?",
-        ob_step3_sub: "The agent sends automatic outreach in this language",
-        ob_continue: "Continue →",
-        ob_launch: "Launch my agent →",
-        ob_toast_sector: "Choose a sector",
-        ob_toast_loc: "Indicate location",
-        ob_toast_lang: "Choose a language",
-        ob_toast_done: "Agent configured! 🎯",
-        nav_dashboard: "Dashboard",
-        nav_leads: "Leads",
-        nav_agent: "Agent",
-        nav_plans: "Plans",
-        nav_logout: "Logout",
-        db_eyebrow: "Overview",
-        db_subtitle: "Your agent works while you sleep",
-        db_total_leads: "Total Leads",
-        db_total_leads_cap: "captured by agent",
-        db_this_week: "This Week",
-        db_this_week_cap: "new leads",
-        db_emails_sent: "Emails Sent",
-        db_emails_sent_cap: "automatic outreach",
-        db_recent_leads: "Recent Leads",
-        leads_eyebrow: "Database",
-        leads_subtitle: "All contacts found by your agent",
-        leads_contacts: "Contacts",
-        agent_eyebrow: "Configuration",
-        agent_title: "AI Agent",
-        agent_subtitle: "Customize how the agent finds and contacts leads",
-        agent_prospecting: "Prospecting",
-        agent_outreach: "Outreach",
-        agent_label_sector: "Target sector",
-        agent_label_location: "Location",
-        agent_label_leads: "Leads per scan",
-        agent_label_lang: "Email language",
-        agent_label_tone: "Message tone",
-        agent_label_reply: "Reply email",
-        agent_label_intro: "Email introduction (optional)",
-        agent_ph_sector: "ex: Dental clinics",
-        agent_ph_loc: "ex: Luxembourg",
-        agent_ph_intro: "Hello, we are Claw Agency...",
-        agent_save: "Save configuration",
-        agent_toast_success: "Configuration saved ✓",
-        agent_toast_error: "Error saving",
-        plans_eyebrow: "Subscription",
-        plans_title: "Plans",
-        plans_subtitle: "Choose the right plan for your business",
-        plans_month: "/month",
-        plans_starter_desc: "To start without risk",
-        plans_growth_desc: "To really accelerate",
-        plans_ent_desc: "Complete tailored solution",
-        plans_starter_btn: "Choose Starter",
-        plans_growth_btn: "Choose Growth",
-        plans_ent_btn: "Choose Enterprise",
-        plans_popular: "Popular",
-        plans_feature_1agent: "1 AI Agent configured",
-        plans_feature_3agents: "3 AI Agents configured",
-        plans_feature_unlimit: "Unlimited Agents",
-        plans_feature_100leads: "100 leads per month",
-        plans_feature_500leads: "500 leads per month",
-        plans_feature_unleads: "Unlimited leads",
-        plans_feature_emails: "Automatic emails",
-        plans_feature_multi: "Multichannel sequences",
-        plans_feature_crm: "Full CRM integration",
-        plans_feature_telegram: "Daily Telegram report",
-        plans_feature_dash: "Custom dashboard",
-        plans_feature_manager: "Dedicated account manager",
-        plans_feature_support: "Email support",
-        plans_feature_prio: "24/7 Priority support",
-        plans_feature_api: "Dedicated API + White-label",
-        status_novo: "New",
-        status_contactado: "Contacted",
-        status_convertido: "Converted",
-        tbl_name: "Name",
-        tbl_sector: "Sector",
-        tbl_email: "Email",
-        tbl_status: "Status",
-        empty_no_leads: "No leads yet",
-        empty_preparing: "The agent is preparing the first prospecting",
-        lang_en: "English",
-        lang_pt: "Português",
-        lang_fr: "Français",
-        lang_de: "Deutsch",
-        lang_es: "Español",
-        dental: "Dental Clinics",
-        real_estate: "Real Estate",
-        restaurants: "Restaurants",
-        lawyers: "Lawyers",
-        consulting: "Consulting",
-        health: "Health",
-        ecommerce: "E-commerce",
-        other: "Other",
-        tone_prof: "Professional",
-        tone_casual: "Casual",
-        tone_direct: "Direct"
-      },
-      pt: {
-        auth_tagline: "Plataforma de Inteligência de Automação",
-        auth_login: "Login",
-        auth_register: "Criar conta",
-        auth_email: "Email",
-        auth_password: "Password",
-        auth_name: "Nome",
-        auth_company: "Empresa",
-        auth_login_btn: "Entrar →",
-        auth_register_btn: "Criar conta grátis →",
-        auth_ph_email: "tu@empresa.com",
-        auth_ph_pass: "••••••••",
-        auth_ph_name: "O teu nome",
-        auth_ph_company: "Nome da empresa",
-        auth_ph_pass_min: "Mínimo 8 caracteres",
-        auth_err_fields: "Preenche todos os campos",
-        auth_err_pass: "Password mínimo 8 caracteres",
-        auth_err_conn: "Erro de ligação ao servidor",
-        ob_step: "Passo",
-        ob_step1_title: "Qual é o teu sector?",
-        ob_step1_sub: "O agente vai procurar leads específicos para o teu nicho",
-        ob_step2_title: "Onde procuras clientes?",
-        ob_step2_sub: "País ou cidade onde o agente vai fazer prospeção",
-        ob_step2_ph: "ex: Luxembourg, Paris, Lisboa...",
-        ob_step3_title: "Idioma dos emails?",
-        ob_step3_sub: "O agente envia outreach neste idioma automaticamente",
-        ob_continue: "Continuar →",
-        ob_launch: "Lançar o meu agente →",
-        ob_toast_sector: "Escolhe um sector",
-        ob_toast_loc: "Indica a localização",
-        ob_toast_lang: "Escolhe um idioma",
-        ob_toast_done: "Agente configurado! 🎯",
-        nav_dashboard: "Dashboard",
-        nav_leads: "Leads",
-        nav_agent: "Agente",
-        nav_plans: "Planos",
-        nav_logout: "Sair",
-        db_eyebrow: "Overview",
-        db_subtitle: "O teu agente trabalha enquanto dormes",
-        db_total_leads: "Total Leads",
-        db_total_leads_cap: "capturados pelo agente",
-        db_this_week: "Esta Semana",
-        db_this_week_cap: "novos leads",
-        db_emails_sent: "Emails Enviados",
-        db_emails_sent_cap: "outreach automático",
-        db_recent_leads: "Leads Recentes",
-        leads_eyebrow: "Base de dados",
-        leads_subtitle: "Todos os contactos encontrados pelo teu agente",
-        leads_contacts: "Contactos",
-        agent_eyebrow: "Configuração",
-        agent_title: "Agente IA",
-        agent_subtitle: "Personaliza como o agente procura e contacta leads",
-        agent_prospecting: "Prospeção",
-        agent_outreach: "Outreach",
-        agent_label_sector: "Sector alvo",
-        agent_label_location: "Localização",
-        agent_label_leads: "Leads por scan",
-        agent_label_lang: "Idioma dos emails",
-        agent_label_tone: "Tom da mensagem",
-        agent_label_reply: "Email de resposta",
-        agent_label_intro: "Introdução do email (opcional)",
-        agent_ph_sector: "ex: Clínicas dentárias",
-        agent_ph_loc: "ex: Luxembourg",
-        agent_ph_intro: "Olá, somos a Claw Agency...",
-        agent_save: "Guardar configuração",
-        agent_toast_success: "Configuração guardada ✓",
-        agent_toast_error: "Erro ao guardar",
-        plans_eyebrow: "Subscrição",
-        plans_title: "Planos",
-        plans_subtitle: "Escolhe o plano certo para o teu negócio",
-        plans_month: "/mês",
-        plans_starter_desc: "Para começar sem risco",
-        plans_growth_desc: "Para acelerar a sério",
-        plans_ent_desc: "Solução completa à medida",
-        plans_starter_btn: "Escolher Starter",
-        plans_growth_btn: "Escolher Growth",
-        plans_ent_btn: "Escolher Enterprise",
-        plans_popular: "Popular",
-        plans_feature_1agent: "1 Agente IA configurado",
-        plans_feature_3agents: "3 Agentes IA configurados",
-        plans_feature_unlimit: "Agentes ilimitados",
-        plans_feature_100leads: "100 leads por mês",
-        plans_feature_500leads: "500 leads por mês",
-        plans_feature_unleads: "Leads ilimitados",
-        plans_feature_emails: "Emails automáticos",
-        plans_feature_multi: "Sequências multicanal",
-        plans_feature_crm: "Integração CRM completa",
-        plans_feature_telegram: "Relatório Telegram diário",
-        plans_feature_dash: "Dashboard personalizado",
-        plans_feature_manager: "Gestor de conta dedicado",
-        plans_feature_support: "Suporte por email",
-        plans_feature_prio: "Suporte prioritário 24/7",
-        plans_feature_api: "API dedicada + White-label",
-        status_novo: "Novo",
-        status_contactado: "Contactado",
-        status_convertido: "Convertido",
-        tbl_name: "Nome",
-        tbl_sector: "Sector",
-        tbl_email: "Email",
-        tbl_status: "Status",
-        empty_no_leads: "Nenhum lead ainda",
-        empty_preparing: "O agente está a preparar a primeira prospeção",
-        lang_en: "English",
-        lang_pt: "Português",
-        lang_fr: "Français",
-        lang_de: "Deutsch",
-        lang_es: "Español",
-        dental: "Clínicas Dentárias",
-        real_estate: "Imobiliário",
-        restaurants: "Restaurantes",
-        lawyers: "Advogados",
-        consulting: "Consultoria",
-        health: "Saúde",
-        ecommerce: "E-commerce",
-        other: "Outro",
-        tone_prof: "Profissional",
-        tone_casual: "Casual",
-        tone_direct: "Directo"
-      },
-      fr: {
-        auth_tagline: "Plateforme d'Intelligence d'Automatisation",
-        auth_login: "Connexion",
-        auth_register: "Créer un compte",
-        auth_email: "E-mail",
-        auth_password: "Mot de passe",
-        auth_name: "Nom",
-        auth_company: "Entreprise",
-        auth_login_btn: "Se connecter →",
-        auth_register_btn: "Créer un compte gratuit →",
-        auth_ph_email: "vous@entreprise.com",
-        auth_ph_pass: "••••••••",
-        auth_ph_name: "Votre nom",
-        auth_ph_company: "Nom de l'entreprise",
-        auth_ph_pass_min: "Minimum 8 caractères",
-        auth_err_fields: "Remplissez tous les champs",
-        auth_err_pass: "Mot de passe de 8 caractères minimum",
-        auth_err_conn: "Erreur de connexion au serveur",
-        ob_step: "Étape",
-        ob_step1_title: "Quel est votre secteur ?",
-        ob_step1_sub: "L'agent trouvera des prospects spécifiques à votre niche",
-        ob_step2_title: "Où recherchez-vous des clients ?",
-        ob_step2_sub: "Pays ou ville où l'agent prospectera",
-        ob_step2_ph: "ex: Luxembourg, Paris, Lyon...",
-        ob_step3_title: "Langue de l'e-mail ?",
-        ob_step3_sub: "L'agent envoie des e-mails automatiques dans cette langue",
-        ob_continue: "Continuer →",
-        ob_launch: "Lancer mon agent →",
-        ob_toast_sector: "Choisissez un secteur",
-        ob_toast_loc: "Indiquez le lieu",
-        ob_toast_lang: "Choisissez une langue",
-        ob_toast_done: "Agent configuré ! 🎯",
-        nav_dashboard: "Tableau de bord",
-        nav_leads: "Prospects",
-        nav_agent: "Agent",
-        nav_plans: "Forfaits",
-        nav_logout: "Déconnexion",
-        db_eyebrow: "Aperçu",
-        db_subtitle: "Votre agent travaille pendant que vous dormez",
-        db_total_leads: "Total Prospects",
-        db_total_leads_cap: "capturés par l'agent",
-        db_this_week: "Cette semaine",
-        db_this_week_cap: "nouveaux prospects",
-        db_emails_sent: "E-mails envoyés",
-        db_emails_sent_cap: "prospection automatique",
-        db_recent_leads: "Prospects récents",
-        leads_eyebrow: "Base de données",
-        leads_subtitle: "Tous les contacts trouvés par votre agent",
-        leads_contacts: "Contacts",
-        agent_eyebrow: "Configuration",
-        agent_title: "Agent IA",
-        agent_subtitle: "Personnalisez la façon dont l'agent trouve et contacte les prospects",
-        agent_prospecting: "Prospection",
-        agent_outreach: "Communication",
-        agent_label_sector: "Secteur cible",
-        agent_label_location: "Localisation",
-        agent_label_leads: "Prospects par scan",
-        agent_label_lang: "Langue de l'e-mail",
-        agent_label_tone: "Ton du message",
-        agent_label_reply: "E-mail de réponse",
-        agent_label_intro: "Introduction de l'e-mail (facultatif)",
-        agent_ph_sector: "ex: Cliniques dentaires",
-        agent_ph_loc: "ex: Luxembourg",
-        agent_ph_intro: "Bonjour, nous sommes Claw Agency...",
-        agent_save: "Enregistrer la configuration",
-        agent_toast_success: "Configuration enregistrée ✓",
-        agent_toast_error: "Erreur lors de l'enregistrement",
-        plans_eyebrow: "Abonnement",
-        plans_title: "Forfaits",
-        plans_subtitle: "Choisissez le forfait adapté à votre entreprise",
-        plans_month: "/mois",
-        plans_starter_desc: "Pour commencer sans risque",
-        plans_growth_desc: "Pour vraiment accélérer",
-        plans_ent_desc: "Solution complète sur mesure",
-        plans_starter_btn: "Choisir Starter",
-        plans_growth_btn: "Choisir Growth",
-        plans_ent_btn: "Choisir Enterprise",
-        plans_popular: "Populaire",
-        plans_feature_1agent: "1 Agent IA configuré",
-        plans_feature_3agents: "3 Agents IA configurés",
-        plans_feature_unlimit: "Agents illimités",
-        plans_feature_100leads: "100 prospects par mois",
-        plans_feature_500leads: "500 prospects par mois",
-        plans_feature_unleads: "Prospects illimités",
-        plans_feature_emails: "E-mails automatiques",
-        plans_feature_multi: "Séquences multicanaux",
-        plans_feature_crm: "Intégration CRM complète",
-        plans_feature_telegram: "Rapport Telegram quotidien",
-        plans_feature_dash: "Tableau de bord personnalisé",
-        plans_feature_manager: "Gestionnaire de compte dédié",
-        plans_feature_support: "Support par e-mail",
-        plans_feature_prio: "Support prioritaire 24h/24, 7j/7",
-        plans_feature_api: "API dédiée + White-label",
-        status_novo: "Nouveau",
-        status_contactado: "Contacté",
-        status_convertido: "Converti",
-        tbl_name: "Nom",
-        tbl_sector: "Secteur",
-        tbl_email: "E-mail",
-        tbl_status: "Statut",
-        empty_no_leads: "Aucun prospect pour le moment",
-        empty_preparing: "L'agent prépare la première prospection",
-        lang_en: "English",
-        lang_pt: "Português",
-        lang_fr: "Français",
-        lang_de: "Deutsch",
-        lang_es: "Español",
-        dental: "Cliniques dentaires",
-        real_estate: "Immobilier",
-        restaurants: "Restaurants",
-        lawyers: "Avocats",
-        consulting: "Consultation",
-        health: "Santé",
-        ecommerce: "E-commerce",
-        other: "Autre",
-        tone_prof: "Professionnel",
-        tone_casual: "Décontracté",
-        tone_direct: "Direct"
-      },
-      de: {
-        auth_tagline: "Plattform für Automatisierungsintelligenz",
-        auth_login: "Login",
-        auth_register: "Konto erstellen",
-        auth_email: "E-Mail",
-        auth_password: "Passwort",
-        auth_name: "Name",
-        auth_company: "Unternehmen",
-        auth_login_btn: "Einloggen →",
-        auth_register_btn: "Kostenloses Konto erstellen →",
-        auth_ph_email: "du@unternehmen.de",
-        auth_ph_pass: "••••••••",
-        auth_ph_name: "Dein Name",
-        auth_ph_company: "Unternehmensname",
-        auth_ph_pass_min: "Mindestens 8 Zeichen",
-        auth_err_fields: "Alle Felder ausfüllen",
-        auth_err_pass: "Passwort mindestens 8 Zeichen",
-        auth_err_conn: "Serververbindungsfehler",
-        ob_step: "Schritt",
-        ob_step1_title: "Was ist Ihre Branche?",
-        ob_step1_sub: "Der Agent findet spezifische Leads für Ihre Nische",
-        ob_step2_title: "Wo suchen Sie nach Kunden?",
-        ob_step2_sub: "Land oder Stadt, in der der Agent akquiriert",
-        ob_step2_ph: "z.B.: Luxemburg, Berlin, Wien...",
-        ob_step3_title: "E-Mail-Sprache?",
-        ob_step3_sub: "Der Agent sendet automatische Outreach-Mails in dieser Sprache",
-        ob_continue: "Weiter →",
-        ob_launch: "Meinen Agenten starten →",
-        ob_toast_sector: "Wählen Sie eine Branche",
-        ob_toast_loc: "Ort angeben",
-        ob_toast_lang: "Sprache wählen",
-        ob_toast_done: "Agent konfiguriert! 🎯",
-        nav_dashboard: "Dashboard",
-        nav_leads: "Leads",
-        nav_agent: "Agent",
-        nav_plans: "Pläne",
-        nav_logout: "Abmelden",
-        db_eyebrow: "Übersicht",
-        db_subtitle: "Ihr Agent arbeitet, während Sie schlafen",
-        db_total_leads: "Gesamt-Leads",
-        db_total_leads_cap: "vom Agenten erfasst",
-        db_this_week: "Diese Woche",
-        db_this_week_cap: "neue Leads",
-        db_emails_sent: "Gisendete E-Mails",
-        db_emails_sent_cap: "automatische Akquise",
-        db_recent_leads: "Aktuelle Leads",
-        leads_eyebrow: "Datenbank",
-        leads_subtitle: "Alle von Ihrem Agenten gefundenen Kontakte",
-        leads_contacts: "Kontakte",
-        agent_eyebrow: "Konfiguration",
-        agent_title: "KI-Agent",
-        agent_subtitle: "Anpassen, wie der Agent Leads findet und kontaktiert",
-        agent_prospecting: "Akquise",
-        agent_outreach: "Outreach",
-        agent_label_sector: "Zielbranche",
-        agent_label_location: "Standort",
-        agent_label_leads: "Leads pro Scan",
-        agent_label_lang: "E-Mail-Sprache",
-        agent_label_tone: "Nachrichtenton",
-        agent_label_reply: "Antwort-E-Mail",
-        agent_label_intro: "E-Mail-Einleitung (optional)",
-        agent_ph_sector: "z.B.: Zahnkliniken",
-        agent_ph_loc: "z.B.: Luxemburg",
-        agent_ph_intro: "Hallo, wir sind Claw Agency...",
-        agent_save: "Konfiguration speichern",
-        agent_toast_success: "Konfiguration gespeichert ✓",
-        agent_toast_error: "Fehler beim Speichern",
-        plans_eyebrow: "Abonnement",
-        plans_title: "Pläne",
-        plans_subtitle: "Wählen Sie den richtigen Plan für Ihr Unternehmen",
-        plans_month: "/Monat",
-        plans_starter_desc: "Risikolos starten",
-        plans_growth_desc: "Richtig beschleunigen",
-        plans_ent_desc: "Komplette maßgeschneiderte Lösung",
-        plans_starter_btn: "Starter wählen",
-        plans_growth_btn: "Growth wählen",
-        plans_ent_btn: "Enterprise wählen",
-        plans_popular: "Beliebt",
-        plans_feature_1agent: "1 KI-Agent konfiguriert",
-        plans_feature_3agents: "3 KI-Agenten konfiguriert",
-        plans_feature_unlimit: "Unbegrenzte Agenten",
-        plans_feature_100leads: "100 Leads pro Monat",
-        plans_feature_500leads: "500 Leads pro Monat",
-        plans_feature_unleads: "Unbegrenzte Leads",
-        plans_feature_emails: "Automatische E-Mails",
-        plans_feature_multi: "Mehrkanal-Sequenzen",
-        plans_feature_crm: "Vollständige CRM-Integration",
-        plans_feature_telegram: "Täglicher Telegram-Bericht",
-        plans_feature_dash: "Individuelles Dashboard",
-        plans_feature_manager: "Eigener Account Manager",
-        plans_feature_support: "E-Mail-Support",
-        plans_feature_prio: "24/7 Prioritäts-Support",
-        plans_feature_api: "Dedizierte API + White-label",
-        status_novo: "Neu",
-        status_contactado: "Kontaktiert",
-        status_convertido: "Konvertiert",
-        tbl_name: "Name",
-        tbl_sector: "Branche",
-        tbl_email: "E-Mail",
-        tbl_status: "Status",
-        empty_no_leads: "Noch keine Leads",
-        empty_preparing: "Der Agent bereitet die erste Akquise vor",
-        lang_en: "English",
-        lang_pt: "Português",
-        lang_fr: "Français",
-        lang_de: "Deutsch",
-        lang_es: "Español",
-        dental: "Zahnkliniken",
-        real_estate: "Immobilien",
-        restaurants: "Restaurants",
-        lawyers: "Anwälte",
-        consulting: "Beratung",
-        health: "Gesundheit",
-        ecommerce: "E-Commerce",
-        other: "Andere",
-        tone_prof: "Professionell",
-        tone_casual: "Locker",
-        tone_direct: "Direkt"
-      },
-      es: {
-        auth_tagline: "Plataforma de Inteligencia de Automatización",
-        auth_login: "Iniciar sesión",
-        auth_register: "Crear cuenta",
-        auth_email: "Correo electrónico",
-        auth_password: "Contraseña",
-        auth_name: "Nombre",
-        auth_company: "Empresa",
-        auth_login_btn: "Entrar →",
-        auth_register_btn: "Crear cuenta gratis →",
-        auth_ph_email: "tu@empresa.com",
-        auth_ph_pass: "••••••••",
-        auth_ph_name: "Tu nombre",
-        auth_ph_company: "Nombre de la empresa",
-        auth_ph_pass_min: "Mínimo 8 caracteres",
-        auth_err_fields: "Rellena todos los campos",
-        auth_err_pass: "Contraseña mínimo 8 caracteres",
-        auth_err_conn: "Error de conexión al servidor",
-        ob_step: "Paso",
-        ob_step1_title: "¿Cuál es tu sector?",
-        ob_step1_sub: "El agente encontrará leads específicos para tu nicho",
-        ob_step2_title: "¿Dónde buscas clientes?",
-        ob_step2_sub: "País o ciudad donde el agente prospectará",
-        ob_step2_ph: "ej: Luxemburgo, Madrid, Barcelona...",
-        ob_step3_title: "¿Idioma de los emails?",
-        ob_step3_sub: "El agente envía outreach automático en este idioma",
-        ob_continue: "Continuar →",
-        ob_launch: "Lanzar mi agente →",
-        ob_toast_sector: "Elige un sector",
-        ob_toast_loc: "Indica la ubicación",
-        ob_toast_lang: "Elige un idioma",
-        ob_toast_done: "¡Agente configurado! 🎯",
-        nav_dashboard: "Panel",
-        nav_leads: "Leads",
-        nav_agent: "Agente",
-        nav_plans: "Planes",
-        nav_logout: "Cerrar sesión",
-        db_eyebrow: "Vista general",
-        db_subtitle: "Tu agente trabaja mientras duermes",
-        db_total_leads: "Total Leads",
-        db_total_leads_cap: "capturados por el agente",
-        db_this_week: "Esta semana",
-        db_this_week_cap: "nuevos leads",
-        db_emails_sent: "Emails enviados",
-        db_emails_sent_cap: "prospección automática",
-        db_recent_leads: "Leads recientes",
-        leads_eyebrow: "Base de datos",
-        leads_subtitle: "Todos los contactos encontrados por tu agente",
-        leads_contacts: "Contactos",
-        agent_eyebrow: "Configuración",
-        agent_title: "Agente IA",
-        agent_subtitle: "Personaliza cómo o agente busca y contacta leads",
-        agent_prospecting: "Prospección",
-        agent_outreach: "Comunicación",
-        agent_label_sector: "Sector objetivo",
-        agent_label_location: "Ubicación",
-        agent_label_leads: "Leads por scan",
-        agent_label_lang: "Idioma del email",
-        agent_label_tone: "Tono del mensaje",
-        agent_label_reply: "Email de respuesta",
-        agent_label_intro: "Introducción del email (opcional)",
-        agent_ph_sector: "ej: Clínicas dentales",
-        agent_ph_loc: "ej: Luxemburgo",
-        agent_ph_intro: "Hola, somos Claw Agency...",
-        agent_save: "Guardar configuración",
-        agent_toast_success: "Configuración guardada ✓",
-        agent_toast_error: "Error al guardar",
-        plans_eyebrow: "Suscripción",
-        plans_title: "Planes",
-        plans_subtitle: "Elige el plan adecuado para tu negocio",
-        plans_month: "/mes",
-        plans_starter_desc: "Para empezar sin riesgo",
-        plans_growth_desc: "Para acelerar de verdad",
-        plans_ent_desc: "Solución completa a medida",
-        plans_starter_btn: "Elegir Starter",
-        plans_growth_btn: "Elegir Growth",
-        plans_ent_btn: "Elegir Enterprise",
-        plans_popular: "Popular",
-        plans_feature_1agent: "1 Agente IA configurado",
-        plans_feature_3agents: "3 Agentes IA configurados",
-        plans_feature_unlimit: "Agentes ilimitados",
-        plans_feature_100leads: "100 leads al mes",
-        plans_feature_500leads: "500 leads al mes",
-        plans_feature_unleads: "Leads ilimitados",
-        plans_feature_emails: "Emails automáticos",
-        plans_feature_multi: "Secuencias multicanal",
-        plans_feature_crm: "Integración CRM completa",
-        plans_feature_telegram: "Informe diario de Telegram",
-        plans_feature_dash: "Panel personalizado",
-        plans_feature_manager: "Gestor de cuenta dedicado",
-        plans_feature_support: "Soporte por email",
-        plans_feature_prio: "Soporte prioritario 24/7",
-        plans_feature_api: "API dedicada + White-label",
-        status_novo: "Nuevo",
-        status_contactado: "Contactado",
-        status_convertido: "Convertido",
-        tbl_name: "Nombre",
-        tbl_sector: "Sector",
-        tbl_email: "Email",
-        tbl_status: "Estado",
-        empty_no_leads: "Aún no hay leads",
-        empty_preparing: "El agente está preparando la primera prospección",
-        lang_en: "English",
-        lang_pt: "Português",
-        lang_fr: "Français",
-        lang_de: "Deutsch",
-        lang_es: "Español",
-        dental: "Clínicas dentales",
-        real_estate: "Inmobiliaria",
-        restaurants: "Restaurantes",
-        lawyers: "Abogados",
-        consulting: "Consultoría",
-        health: "Salud",
-        ecommerce: "E-commerce",
-        other: "Otro",
-        tone_prof: "Profesional",
-        tone_casual: "Casual",
-        tone_direct: "Directo"
-      }
-    };
-
-    let CURR_LANG = localStorage.getItem('claw_lang') || 'en';
-    let USER = null, OB = { sector: '', location: '', language: 'en' };
-
-    function t(key) { return TRANSLATIONS[CURR_LANG][key] || key; }
-    function updateUI() {
-      document.querySelectorAll('[data-i18n]').forEach(el => el.textContent = t(el.dataset.i18n));
-      document.querySelectorAll('[data-i18n-ph]').forEach(el => el.placeholder = t(el.dataset.i18nPh));
-    }
-    function setLang(lang) {
-      CURR_LANG = lang;
-      localStorage.setItem('claw_lang', lang);
-      updateUI();
-      // update dropdown button
-      const flags = { en: '🇬🇧', pt: '🇵🇹', fr: '🇫🇷', de: '🇩🇪', es: '🇪🇸' };
-      const labels = { en: 'EN', pt: 'PT', fr: 'FR', de: 'DE', es: 'ES' };
-      const flagEl = document.getElementById('lang-flag-current');
-      const labelEl = document.getElementById('lang-label-current');
-      if (flagEl) flagEl.textContent = flags[lang] || '🇬🇧';
-      if (labelEl) labelEl.textContent = labels[lang] || 'EN';
-      // update active opt
-      document.querySelectorAll('.lang-opt').forEach(opt => opt.classList.toggle('active', opt.dataset.lang === lang));
-      // close menu
-      document.getElementById('lang-menu')?.classList.remove('open');
-      document.getElementById('lang-btn')?.classList.remove('open');
-    }
-    function toggleLangMenu(e) {
-      e.stopPropagation();
-      const menu = document.getElementById('lang-menu');
-      const btn = document.getElementById('lang-btn');
-      menu.classList.toggle('open');
-      btn.classList.toggle('open');
-    }
-    document.addEventListener('click', () => {
-      document.getElementById('lang-menu')?.classList.remove('open');
-      document.getElementById('lang-btn')?.classList.remove('open');
-    });
-
-    function toast(msg, type = 'success') { const t = document.getElementById('toast'); t.textContent = msg; t.className = `toast t-${type} show`; setTimeout(() => t.classList.remove('show'), 3000); }
-    function setBtn(btn, loading) { if (loading) { btn.dataset.txt = btn.innerHTML; btn.innerHTML = '<span class="loader"></span>'; btn.disabled = true; } else { btn.innerHTML = btn.dataset.txt; btn.disabled = false; } }
-    function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('active')); document.getElementById(id).classList.add('active'); }
-    function switchTab(tab) { document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active')); document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active')); event.target.classList.add('active'); document.getElementById(tab + '-form').classList.add('active'); }
-
-    async function doLogin() {
-      const email = document.getElementById('login-email').value.trim().toLowerCase();
-      const pass = document.getElementById('login-pass').value;
-      const err = document.getElementById('login-error'); err.classList.remove('show');
-      if (!email || !pass) { err.textContent = t('auth_err_fields'); err.classList.add('show'); return; }
-      const btn = event.target; setBtn(btn, true);
-      try {
-        const r = await fetch(`${API}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: pass }) });
-        const d = await r.json(); if (d.error) { err.textContent = d.error; err.classList.add('show'); } else { localStorage.setItem('claw_token', d.token); loadApp(d); }
-      }
-      catch (e) { err.textContent = 'Erro de ligação ao servidor'; err.classList.add('show'); }
-      setBtn(btn, false);
-    }
-
-    async function doRegister() {
-      const name = document.getElementById('reg-name').value.trim();
-      const company = document.getElementById('reg-company').value.trim();
-      const email = document.getElementById('reg-email').value.trim().toLowerCase();
-      const pass = document.getElementById('reg-pass').value;
-      const err = document.getElementById('reg-error'); err.classList.remove('show');
-      if (!name || !email || !pass) { err.textContent = t('auth_err_fields'); err.classList.add('show'); return; }
-      if (pass.length < 8) { err.textContent = t('auth_err_pass'); err.classList.add('show'); return; }
-      const btn = event.target; setBtn(btn, true);
-      try {
-        const r = await fetch(`${API}/api/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, company, email, password: pass }) });
-        const d = await r.json(); if (d.error) { err.textContent = d.error; err.classList.add('show'); } else { localStorage.setItem('claw_token', d.token); USER = { name, email, plan: 'trial' }; show('onboarding-screen'); }
-      }
-      catch (e) { err.textContent = 'Erro de ligação ao servidor'; err.classList.add('show'); }
-      setBtn(btn, false);
-    }
-
-    function doLogout() { localStorage.removeItem('claw_token'); USER = null; show('auth-screen'); }
-    function pickTag(btn, key, val) { btn.closest('.tag-grid').querySelectorAll('.tag-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); OB[key] = val; }
-    function pickLang(card, lang) { card.closest('.lang-grid').querySelectorAll('.lang-card').forEach(c => c.classList.remove('selected')); card.classList.add('selected'); OB.language = lang; }
-    function goStep(n) {
-      if (n === 1 && !OB.sector) { toast(t('ob_toast_sector'), 'error'); return; }
-      if (n === 2) { const l = document.getElementById('ob-loc').value.trim(); if (!l) { toast(t('ob_toast_loc'), 'error'); return; } OB.location = l; }
-      document.querySelectorAll('.ob-step').forEach(s => s.classList.remove('active'));
-      document.getElementById(`ob-${n}`).classList.add('active');
-      document.querySelectorAll('.ob-step-dot').forEach((d, i) => { d.classList.toggle('active', i === n); d.classList.toggle('done', i < n); });
-    }
-    async function finishOnboarding() {
-      const btn = document.getElementById('ob-finish-btn'); setBtn(btn, true);
-      try { const token = localStorage.getItem('claw_token'); await fetch(`${API}/api/agent-config`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(OB) }); } catch (e) { }
-      setBtn(btn, false); toast(t('ob_toast_done')); show('app-screen'); loadDashboard();
-    }
-    function loadApp(data) {
-      USER = data;
-      document.getElementById('sb-name').textContent = data.name || '–';
-      document.getElementById('sb-email').textContent = data.email || '–';
-      const labels = { trial: 'Trial', starter: '⚡ Starter', growth: '🔥 Growth', enterprise: '👑 Enterprise' };
-      document.getElementById('sidebar-plan').textContent = labels[data.plan] || data.plan;
-      show('app-screen'); loadDashboard();
-    }
-    async function loadDashboard() {
-      const token = localStorage.getItem('claw_token'); if (!token) return;
-      try {
-        const r = await fetch(`${API}/api/my-stats`, { headers: { 'Authorization': `Bearer ${token}` } }); const d = await r.json();
-        document.getElementById('s-leads').textContent = d.total_leads ?? 0; document.getElementById('s-week').textContent = d.new_this_week ?? 0; document.getElementById('s-emails').textContent = d.emails_sent ?? 0; document.getElementById('chip-leads').textContent = d.total_leads ?? 0;
-      } catch (e) { }
-      try { const r = await fetch(`${API}/api/my-leads?limit=5`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('claw_token')}` } }); const leads = await r.json(); renderTable('tbl-preview', leads, 5); } catch (e) { }
-    }
-    function renderTable(id, leads, limit) {
-      const el = document.getElementById(id);
-      if (!leads || !leads.length) { el.innerHTML = `<div class="empty"><div class="empty-icon">◎</div><div class="empty-title">${t('empty_no_leads')}</div><div>${t('empty_preparing')}</div></div>`; return; }
-      const rows = leads.slice(0, limit || 999);
-      el.innerHTML = `<table><thead><tr><th data-i18n="tbl_name">${t('tbl_name')}</th><th data-i18n="tbl_sector">${t('tbl_sector')}</th><th data-i18n="tbl_email">${t('tbl_email')}</th><th data-i18n="tbl_status">${t('tbl_status')}</th></tr></thead><tbody>${rows.map(l => `<tr><td>${l.name || '—'}</td><td>${l.sector || '—'}</td><td style="font-family:monospace;font-size:12px">${l.email || '—'}</td><td><span class="pill pill-${l.status || 'novo'}">${t('status_' + (l.status || 'novo'))}</span></td></tr>`).join('')}</tbody></table>`;
-    }
-    async function openPanel(name, el) {
-      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active')); document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-      document.getElementById(`panel-${name}`).classList.add('active'); el.classList.add('active');
-      if (name === 'leads') { try { const token = localStorage.getItem('claw_token'); const r = await fetch(`${API}/api/my-leads?limit=200`, { headers: { 'Authorization': `Bearer ${token}` } }); const leads = await r.json(); renderTable('tbl-full', leads); document.getElementById('chip-all').textContent = leads.length; } catch (e) { } }
-      if (name === 'agent') { try { const token = localStorage.getItem('claw_token'); const r = await fetch(`${API}/api/me`, { headers: { 'Authorization': `Bearer ${token}` } }); const d = await r.json(); const c = d.agent_config || {}; document.getElementById('cfg-sector').value = c.sector || ''; document.getElementById('cfg-location').value = c.location || ''; document.getElementById('cfg-lang').value = c.language || 'en'; document.getElementById('cfg-reply').value = c.reply_email || ''; document.getElementById('cfg-instructions').value = c.instructions || ''; } catch (e) { } }
-    }
-    async function saveConfig() {
-      const config = { sector: document.getElementById('cfg-sector').value, location: document.getElementById('cfg-location').value, language: document.getElementById('cfg-lang').value, reply_email: document.getElementById('cfg-reply').value, instructions: document.getElementById('cfg-instructions').value };
-      const btn = event.target; setBtn(btn, true);
-      try { const token = localStorage.getItem('claw_token'); await fetch(`${API}/api/agent-config`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify(config) }); toast('Skill Synced Successfully ✓'); }
-      catch (e) { toast('Sync Error', 'error'); }
-      setBtn(btn, false);
-    }
-    async function choosePlan(plan) {
-      const btn = event.target; setBtn(btn, true);
-      try { const token = localStorage.getItem('claw_token'); const r = await fetch(`${API}/api/checkout`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ plan }) }); const d = await r.json(); if (d.url) window.location.href = d.url; else toast(d.error || 'Erro', 'error'); }
-      catch (e) { toast('Erro de ligação', 'error'); }
-      setBtn(btn, false);
-    }
-    async function boot() {
-      const token = localStorage.getItem('claw_token'); if (!token) return;
-      try { const r = await fetch(`${API}/api/me`, { headers: { 'Authorization': `Bearer ${token}` } }); if (r.ok) { const d = await r.json(); loadApp(d); } else localStorage.removeItem('claw_token'); } catch (e) { }
-    }
-    document.addEventListener('keydown', e => { if (e.key === 'Enter') { const f = document.querySelector('.auth-form.active'); if (f) f.querySelector('.btn-primary')?.click(); } });
-    boot();
+        const API = 'https://claw-agency-production.up.railway.app';
+        async function saveConfig() {
+            const btn = event.target; btn.textContent = 'SYNCING...';
+            const config = {
+                sector: document.getElementById('cfg-sector').value,
+                location: document.getElementById('cfg-location').value,
+                language: document.getElementById('cfg-lang').value,
+                reply_email: document.getElementById('cfg-reply').value,
+                instructions: document.getElementById('cfg-instructions').value
+            };
+            try {
+                const token = localStorage.getItem('claw_token');
+                await fetch(`${API}/api/agent-config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify(config)
+                });
+                alert('Skill Synced Successfully!');
+            } catch (e) { alert('Sync Error'); }
+            btn.textContent = 'SAVE & SYNC SKILL';
+        }
+        function openPanel(name, el) {
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            document.getElementById('panel-' + name).classList.add('active');
+            el.classList.add('active');
+        }
   </script>
 </body>
 
