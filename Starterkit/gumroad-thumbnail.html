@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap');
+
+  body {
+    width: 600px;
+    height: 600px;
+    overflow: hidden;
+    background: #0d0b0b;
+    font-family: 'Syne', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .bg {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 500px 500px at 50% 50%, #1a0404 0%, transparent 70%);
+  }
+
+  .grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(192,57,43,0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(192,57,43,0.07) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+
+  /* Corner brackets */
+  .corner { position: absolute; width: 32px; height: 32px; }
+  .corner.tl { top: 28px; left: 28px; border-top: 2px solid #c0392b66; border-left: 2px solid #c0392b66; }
+  .corner.tr { top: 28px; right: 28px; border-top: 2px solid #c0392b66; border-right: 2px solid #c0392b66; }
+  .corner.bl { bottom: 28px; left: 28px; border-bottom: 2px solid #c0392b66; border-left: 2px solid #c0392b66; }
+  .corner.br { bottom: 28px; right: 28px; border-bottom: 2px solid #c0392b66; border-right: 2px solid #c0392b66; }
+
+  .content {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0;
+  }
+
+  .eagle {
+    font-size: 80px;
+    line-height: 1;
+    filter: drop-shadow(0 0 30px #c0392baa);
+    margin-bottom: 16px;
+  }
+
+  .brand {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    color: #c0392b;
+    margin-bottom: 20px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .title {
+    font-size: 36px;
+    font-weight: 800;
+    line-height: 1.1;
+    color: #f5f0ec;
+    letter-spacing: -1.5px;
+    margin-bottom: 8px;
+  }
+
+  .title .red { color: #e74c3c; }
+
+  .sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    color: #666;
+    letter-spacing: 0.5px;
+    margin-bottom: 28px;
+  }
+
+  .divider {
+    width: 60px;
+    height: 2px;
+    background: #c0392b;
+    margin-bottom: 24px;
+  }
+
+  .price {
+    background: #c0392b;
+    color: white;
+    font-size: 32px;
+    font-weight: 800;
+    padding: 10px 32px;
+    border-radius: 8px;
+    letter-spacing: -1px;
+    box-shadow: 0 8px 40px #c0392b55;
+    margin-bottom: 16px;
+  }
+
+  .tags {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .tag {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: #555;
+    background: #ffffff06;
+    border: 1px solid #ffffff10;
+    padding: 4px 10px;
+    border-radius: 100px;
+    letter-spacing: 0.5px;
+  }
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="grid"></div>
+  <div class="corner tl"></div>
+  <div class="corner tr"></div>
+  <div class="corner bl"></div>
+  <div class="corner br"></div>
+
+  <div class="content">
+    <div class="eagle">🦅</div>
+    <div class="brand">Claw Agency</div>
+    <div class="title">AI Lead Gen<br><span class="red">Starter Kit</span></div>
+    <div class="sub">Build your agency in a weekend</div>
+    <div class="divider"></div>
+    <div class="price">$47</div>
+    <div class="tags">
+      <div class="tag">Flask</div>
+      <div class="tag">Groq AI</div>
+      <div class="tag">Railway</div>
+      <div class="tag">Apify</div>
+      <div class="tag">Stripe</div>
+    </div>
+  </div>
+</body>
+</html>

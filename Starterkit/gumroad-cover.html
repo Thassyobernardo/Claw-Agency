@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap');
+
+  body {
+    width: 1280px;
+    height: 720px;
+    overflow: hidden;
+    background: #0d0b0b;
+    font-family: 'Syne', sans-serif;
+  }
+
+  .bg {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse 700px 500px at 20% 50%, #1a0404 0%, transparent 70%),
+      radial-gradient(ellipse 500px 400px at 80% 20%, #1c0505 0%, transparent 60%),
+      radial-gradient(ellipse 400px 300px at 90% 90%, #120303 0%, transparent 60%);
+  }
+
+  /* Grid lines */
+  .grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(192,57,43,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(192,57,43,0.06) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  /* Diagonal red slash accent */
+  .slash {
+    position: absolute;
+    top: -100px;
+    right: 180px;
+    width: 6px;
+    height: 900px;
+    background: linear-gradient(180deg, transparent, #c0392b, #e74c3c, transparent);
+    transform: rotate(-15deg);
+    opacity: 0.4;
+  }
+  .slash2 {
+    position: absolute;
+    top: -100px;
+    right: 210px;
+    width: 2px;
+    height: 900px;
+    background: linear-gradient(180deg, transparent, #c0392b44, transparent);
+    transform: rotate(-15deg);
+  }
+
+  /* Glow blob */
+  .glow {
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, #c0392b18 0%, transparent 70%);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+  }
+
+  .container {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    height: 100%;
+    padding: 72px 88px;
+  }
+
+  /* Top badge */
+  .badge-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 36px;
+  }
+
+  .badge {
+    background: #c0392b14;
+    border: 1px solid #c0392b55;
+    color: #e74c3c;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 6px 16px;
+    border-radius: 4px;
+  }
+
+  .badge-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, #c0392b33, transparent);
+    max-width: 200px;
+  }
+
+  /* Eagle logo */
+  .logo-area {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 28px;
+  }
+
+  .eagle {
+    font-size: 52px;
+    filter: drop-shadow(0 0 20px #c0392b88);
+    line-height: 1;
+  }
+
+  .brand {
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 5px;
+    text-transform: uppercase;
+    color: #c0392b;
+  }
+
+  /* Main headline */
+  .headline {
+    font-size: 72px;
+    font-weight: 800;
+    line-height: 1.0;
+    color: #f5f0ec;
+    letter-spacing: -2px;
+    margin-bottom: 12px;
+    max-width: 750px;
+  }
+
+  .headline .accent {
+    color: #e74c3c;
+  }
+
+  .subheadline {
+    font-family: 'DM Mono', monospace;
+    font-size: 16px;
+    color: #888;
+    font-weight: 400;
+    margin-bottom: 48px;
+    letter-spacing: 0.5px;
+  }
+
+  /* Tech stack pills */
+  .stack {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .pill {
+    background: #ffffff08;
+    border: 1px solid #ffffff15;
+    color: #aaa;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    padding: 7px 16px;
+    border-radius: 100px;
+    letter-spacing: 0.5px;
+  }
+
+  .pill.hot {
+    background: #c0392b18;
+    border-color: #c0392b44;
+    color: #e74c3c;
+  }
+
+  /* Right side — dashboard mockup */
+  .mockup {
+    position: absolute;
+    right: -30px;
+    top: 50%;
+    transform: translateY(-50%) perspective(1000px) rotateY(-12deg) rotateX(3deg);
+    width: 520px;
+    background: #111010;
+    border: 1px solid #c0392b22;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow:
+      -40px 0 80px #00000088,
+      0 0 60px #c0392b18,
+      inset 0 1px 0 #ffffff10;
+  }
+
+  .mockup-bar {
+    background: #1a1010;
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #c0392b22;
+  }
+
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.r { background: #c0392b; }
+  .dot.y { background: #f39c12; opacity: 0.5; }
+  .dot.g { background: #27ae60; opacity: 0.5; }
+
+  .mockup-url {
+    margin-left: 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: #555;
+  }
+
+  .mockup-body {
+    padding: 20px;
+    display: flex;
+    gap: 12px;
+  }
+
+  /* Sidebar */
+  .mock-sidebar {
+    width: 120px;
+    flex-shrink: 0;
+  }
+
+  .mock-logo {
+    color: #c0392b;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    margin-bottom: 20px;
+    font-family: 'DM Mono', monospace;
+  }
+
+  .mock-nav-item {
+    height: 24px;
+    border-radius: 6px;
+    margin-bottom: 6px;
+    background: #ffffff08;
+  }
+
+  .mock-nav-item.active {
+    background: #c0392b22;
+    border: 1px solid #c0392b33;
+  }
+
+  /* Main content */
+  .mock-main { flex: 1; }
+
+  .mock-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .mock-stat {
+    background: #ffffff05;
+    border: 1px solid #ffffff0a;
+    border-radius: 8px;
+    padding: 10px;
+  }
+
+  .mock-stat-num {
+    font-family: 'DM Mono', monospace;
+    font-size: 22px;
+    font-weight: 500;
+    color: #e74c3c;
+    line-height: 1;
+  }
+
+  .mock-stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: #444;
+    margin-top: 4px;
+  }
+
+  .mock-table-row {
+    height: 20px;
+    background: #ffffff05;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    padding: 0 8px;
+  }
+
+  .mock-dot-green {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: #27ae60;
+    flex-shrink: 0;
+  }
+
+  .mock-line {
+    flex: 1;
+    height: 6px;
+    background: #ffffff08;
+    border-radius: 2px;
+  }
+
+  .mock-line.short { max-width: 60px; }
+  .mock-line.med { max-width: 90px; }
+
+  /* Price tag */
+  .price-badge {
+    position: absolute;
+    bottom: 60px;
+    right: 560px;
+    background: #c0392b;
+    color: white;
+    font-size: 28px;
+    font-weight: 800;
+    padding: 14px 28px;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px #c0392b66;
+    letter-spacing: -1px;
+    z-index: 20;
+  }
+
+  .price-sub {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    font-weight: 400;
+    opacity: 0.8;
+    letter-spacing: 1px;
+    display: block;
+    text-align: center;
+    margin-top: 2px;
+  }
+
+  /* Corner decoration */
+  .corner-tl {
+    position: absolute;
+    top: 40px;
+    left: 40px;
+    width: 40px;
+    height: 40px;
+    border-top: 2px solid #c0392b44;
+    border-left: 2px solid #c0392b44;
+  }
+
+  .corner-br {
+    position: absolute;
+    bottom: 40px;
+    right: 40px;
+    width: 40px;
+    height: 40px;
+    border-bottom: 2px solid #c0392b44;
+    border-right: 2px solid #c0392b44;
+  }
+</style>
+</head>
+<body>
+  <div class="bg"></div>
+  <div class="grid"></div>
+  <div class="slash"></div>
+  <div class="slash2"></div>
+  <div class="glow"></div>
+  <div class="corner-tl"></div>
+  <div class="corner-br"></div>
+
+  <div class="container">
+    <div class="badge-row">
+      <div class="badge">Digital Kit</div>
+      <div class="badge-line"></div>
+    </div>
+
+    <div class="logo-area">
+      <div class="eagle">🦅</div>
+      <div class="brand">Claw Agency</div>
+    </div>
+
+    <div class="headline">
+      Build Your AI<br><span class="accent">Lead Gen Agency</span><br>in a Weekend
+    </div>
+
+    <div class="subheadline">Flask + Apify + Groq LLaMA-3 + Railway — Runs 24/7 for $15/month</div>
+
+    <div class="stack">
+      <div class="pill hot">🤖 Hunter Agent</div>
+      <div class="pill hot">⚡ Groq AI</div>
+      <div class="pill">Flask</div>
+      <div class="pill">PostgreSQL</div>
+      <div class="pill">Railway</div>
+      <div class="pill">Apify</div>
+      <div class="pill">Stripe</div>
+      <div class="pill hot">🛡️ OpenClaw BONUS</div>
+    </div>
+  </div>
+
+  <!-- Dashboard mockup -->
+  <div class="mockup">
+    <div class="mockup-bar">
+      <div class="dot r"></div>
+      <div class="dot y"></div>
+      <div class="dot g"></div>
+      <div class="mockup-url">claw-agency-production.up.railway.app/app</div>
+    </div>
+    <div class="mockup-body">
+      <div class="mock-sidebar">
+        <div class="mock-logo">🦅 CLAW</div>
+        <div class="mock-nav-item active"></div>
+        <div class="mock-nav-item"></div>
+        <div class="mock-nav-item"></div>
+        <div class="mock-nav-item"></div>
+        <div class="mock-nav-item"></div>
+      </div>
+      <div class="mock-main">
+        <div class="mock-stats">
+          <div class="mock-stat">
+            <div class="mock-stat-num">47</div>
+            <div class="mock-stat-label">LEADS TODAY</div>
+          </div>
+          <div class="mock-stat">
+            <div class="mock-stat-num">12</div>
+            <div class="mock-stat-label">EMAILS SENT</div>
+          </div>
+          <div class="mock-stat">
+            <div class="mock-stat-num">3</div>
+            <div class="mock-stat-label">REPLIES</div>
+          </div>
+          <div class="mock-stat">
+            <div class="mock-stat-num">€0</div>
+            <div class="mock-stat-label">PIPELINE</div>
+          </div>
+        </div>
+        <div class="mock-table-row"><div class="mock-dot-green"></div><div class="mock-line med"></div><div class="mock-line short"></div></div>
+        <div class="mock-table-row"><div class="mock-dot-green"></div><div class="mock-line short"></div><div class="mock-line med"></div></div>
+        <div class="mock-table-row"><div class="mock-dot-green"></div><div class="mock-line med"></div><div class="mock-line short"></div></div>
+        <div class="mock-table-row"><div class="mock-dot-green"></div><div class="mock-line short"></div><div class="mock-line med"></div></div>
+        <div class="mock-table-row"><div class="mock-dot-green"></div><div class="mock-line med"></div><div class="mock-line short"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Price tag -->
+  <div class="price-badge">
+    $47
+    <span class="price-sub">ONE-TIME · NO SUBSCRIPTION</span>
+  </div>
+</body>
+</html>

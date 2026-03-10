@@ -1,0 +1,187 @@
+import os
+import logging
+import psycopg2
+from sqlalchemy import create_engine, text
+
+log = logging.getLogger(__name__)
+
+def get_db_url():
+    url = os.getenv("DATABASE_URL", "")
+    if not url:
+        raise ValueError("DATABASE_URL not set")
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql://", 1)
+    return url
+
+def get_engine():
+    return create_engine(get_db_url(), pool_pre_ping=True, connect_args={"connect_timeout": 10})
+
+def get_db_connection():
+    url = get_db_url()
+    url2 = url.replace("postgresql://", "")
+    user_pass, rest = url2.split("@")
+    user, password = user_pass.split(":")
+    host_port, dbname = rest.split("/")
+    if ":" in host_port:
+        host, port = host_port.split(":")
+    else:
+        host, port = host_port, "5432"
+    return psycopg2.connect(host=host, port=port, dbname=dbname, user=user, password=password)
+
+def init_db():
+    engine = get_engine()
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS leads (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255), email VARCHAR(255), phone VARCHAR(50),
+                sector VARCHAR(100), location VARCHAR(100),
+                score INTEGER DEFAULT 0, status VARCHAR(50) DEFAULT 'novo',
+                source VARCHAR(100), notes TEXT, created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS emails_sent (
+                id SERIAL PRIMARY KEY, lead_id INTEGER,
+                subject VARCHAR(255), body TEXT, sent_at TIMESTAMP DEFAULT NOW(),
+                opened BOOLEAN DEFAULT FALSE, replied BOOLEAN DEFAULT FALSE
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS agent_logs (
+                id SERIAL PRIMARY KEY, action VARCHAR(100),
+                details TEXT, created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS security_log (
+                id SERIAL PRIMARY KEY, threat_type VARCHAR(50),
+                source TEXT, content_preview TEXT, created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        # MULTI-TENANT TABLES
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                email VARCHAR(255) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                name VARCHAR(255), company VARCHAR(255),
+                plan VARCHAR(50) DEFAULT 'trial',
+                status VARCHAR(50) DEFAULT 'active',
+                stripe_customer_id VARCHAR(255),
+                stripe_subscription_id VARCHAR(255),
+                agent_config JSONB DEFAULT '{}',
+                telegram_chat_id VARCHAR(100),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS tenant_leads (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                name VARCHAR(255), email VARCHAR(255), phone VARCHAR(50),
+                website VARCHAR(255), sector VARCHAR(100), location VARCHAR(100),
+                score INTEGER DEFAULT 0, status VARCHAR(50) DEFAULT 'novo',
+                source VARCHAR(100), notes TEXT, created_at TIMESTAMP DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS tenant_emails (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id),
+                lead_id INTEGER REFERENCES tenant_leads(id),
+                subject VARCHAR(255), sent_at TIMESTAMP DEFAULT NOW(),
+                opened BOOLEAN DEFAULT FALSE, replied BOOLEAN DEFAULT FALSE
+            )
+        """))
+        conn.commit()
+    log.info("Database tables ready (multi-tenant)")
+
+def get_stats():
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            leads = conn.execute(text("SELECT COUNT(*) FROM leads")).scalar()
+            emails = conn.execute(text("SELECT COUNT(*) FROM emails_sent")).scalar()
+            logs = conn.execute(text("SELECT COUNT(*) FROM agent_logs WHERE created_at > NOW() - INTERVAL '24 hours'")).scalar()
+            return {"leads": leads, "emails_sent": emails, "scans_today": logs}
+    except Exception as e:
+        log.error(f"get_stats error: {e}")
+        return {"leads": 0, "emails_sent": 0, "scans_today": 0}
+
+def get_leads(limit=50):
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            result = conn.execute(text("SELECT * FROM leads ORDER BY created_at DESC LIMIT :limit"), {"limit": limit})
+            return [dict(r._mapping) for r in result.fetchall()]
+    except Exception as e:
+        log.error(f"get_leads error: {e}")
+        return []
+
+def get_tenant_leads(user_id, limit=100):
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT * FROM tenant_leads WHERE user_id = :uid
+                ORDER BY created_at DESC LIMIT :limit
+            """), {"uid": user_id, "limit": limit})
+            return [dict(r._mapping) for r in result.fetchall()]
+    except Exception as e:
+        log.error(f"get_tenant_leads error: {e}")
+        return []
+
+def get_tenant_stats(user_id):
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            leads = conn.execute(text("SELECT COUNT(*) FROM tenant_leads WHERE user_id = :uid"), {"uid": user_id}).scalar()
+            emails = conn.execute(text("SELECT COUNT(*) FROM tenant_emails WHERE user_id = :uid"), {"uid": user_id}).scalar()
+            new_week = conn.execute(text("SELECT COUNT(*) FROM tenant_leads WHERE user_id = :uid AND created_at > NOW() - INTERVAL '7 days'"), {"uid": user_id}).scalar()
+            return {"total_leads": leads, "emails_sent": emails, "new_this_week": new_week}
+    except Exception as e:
+        log.error(f"get_tenant_stats error: {e}")
+        return {"total_leads": 0, "emails_sent": 0, "new_this_week": 0}
+
+def save_lead(name, email, phone, sector, location, score, source, notes=""):
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            conn.execute(text("""
+                INSERT INTO leads (name, email, phone, sector, location, score, source, notes)
+                VALUES (:name, :email, :phone, :sector, :location, :score, :source, :notes)
+            """), {"name": name, "email": email, "phone": phone,
+                  "sector": sector, "location": location,
+                  "score": score, "source": source, "notes": notes})
+            conn.commit()
+        return True
+    except Exception as e:
+        log.error(f"save_lead error: {e}")
+        return False
+
+def log_action(action, details=""):
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            conn.execute(text("INSERT INTO agent_logs (action, details) VALUES (:action, :details)"),
+                        {"action": action, "details": details})
+            conn.commit()
+    except Exception as e:
+        log.error(f"log_action error: {e}")
+
+def get_all_users_summary():
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            result = conn.execute(text("""
+                SELECT u.id, u.email, u.name, u.plan, u.status, u.created_at,
+                       COUNT(tl.id) as lead_count
+                FROM users u
+                LEFT JOIN tenant_leads tl ON tl.user_id = u.id
+                GROUP BY u.id ORDER BY u.created_at DESC
+            """))
+            return [dict(r._mapping) for r in result.fetchall()]
+    except Exception as e:
+        log.error(f"get_all_users_summary error: {e}")
+        return []

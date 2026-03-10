@@ -1,0 +1,15 @@
+flask
+gunicorn
+sqlalchemy
+psycopg2-binary
+apscheduler
+pytz
+requests
+python-dotenv
+groq
+resend
+apify-client==1.7.0
+beautifulsoup4
+lxml
+stripe
+PyJWT
