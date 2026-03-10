@@ -1,22 +1,24 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Claw Agency — AI Prospecting Platform</title>
+  <title>Claw Agency</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link
-    href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Epilogue:wght@300;400;500;600&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Clash+Display:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Epilogue:wght@300;400;500&display=swap"
     rel="stylesheet">
   <style>
     :root {
       --white: #f7f5f0;
       --ink: #0d0d0d;
       --red: #c0392b;
-      --border: #ddd9d3;
-      --warm: #f0ebe3;
+      --red2: #e74c3c;
+      --grey: #e8e4de;
+      --grey2: #d4cfc8;
       --muted: #8a8580;
+      --warm: #f0ebe3;
     }
 
     *,
@@ -27,232 +29,1820 @@
       box-sizing: border-box;
     }
 
+    html {
+      scroll-behavior: smooth;
+    }
+
     body {
       background: var(--white);
       color: var(--ink);
       font-family: 'Epilogue', sans-serif;
       font-weight: 300;
-      min-height: 100vh;
+      overflow-x: hidden;
     }
 
-    .screen {
-      display: none;
-      min-height: 100vh;
-    }
-
-    .screen.active {
-      display: block;
-    }
-
-    #app-screen.active {
-      display: flex;
-    }
-
-    .sidebar {
-      width: 248px;
-      background: var(--white);
-      border-right: 1px solid var(--border);
+    /* NOISE OVERLAY */
+    body::before {
+      content: '';
       position: fixed;
-      height: 100vh;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+      opacity: 0.35;
     }
 
-    .sidebar-logo {
-      padding: 28px 24px;
+    /* NAV */
+    nav {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      padding: 28px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      mix-blend-mode: multiply;
+    }
+
+    .nav-logo {
       font-family: 'Clash Display', sans-serif;
       font-weight: 700;
-      border-bottom: 1px solid var(--border);
+      font-size: 18px;
+      letter-spacing: 0.05em;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 8px;
     }
 
-    .sidebar-logo span {
+    .nav-logo-claw {
       color: var(--red);
     }
 
-    .sidebar-nav {
-      padding: 8px 12px;
+    .nav-links {
+      display: flex;
+      gap: 32px;
+      align-items: center;
     }
 
-    .nav-item {
+    .nav-links a {
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-decoration: none;
+      color: var(--muted);
+      transition: color 0.2s;
+      text-transform: uppercase;
+    }
+
+    .nav-links a:hover {
+      color: var(--ink);
+    }
+
+    .nav-cta {
+      background: var(--ink) !important;
+      color: var(--white) !important;
+      padding: 10px 22px;
+      border-radius: 2px;
+      font-family: 'Epilogue', sans-serif;
+      font-weight: 500;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+    }
+
+    .nav-cta:hover {
+      background: var(--red) !important;
+    }
+
+    /* LANG — inside nav */
+    .lang-bar {
+      display: flex;
+      gap: 2px;
+      background: var(--grey);
+      border-radius: 3px;
+      padding: 3px;
+    }
+
+    .lb {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: 'Epilogue', sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      padding: 5px 10px;
+      border-radius: 2px;
+      transition: all 0.18s;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    .lb.on {
+      background: var(--white);
+      color: var(--ink);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+
+    .lb:hover:not(.on) {
+      color: var(--ink);
+    }
+
+    /* HERO */
+    .hero {
+      min-height: 100vh;
+      position: relative;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      overflow: hidden;
+    }
+
+    .hero-left {
+      padding: 160px 48px 80px 48px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      position: relative;
+      z-index: 2;
+    }
+
+    .hero-right {
+      position: relative;
+      overflow: hidden;
+      background: var(--warm);
+    }
+
+    .hero-right-inner {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Animated organic blob */
+    .blob-wrap {
+      position: relative;
+      width: 480px;
+      height: 480px;
+    }
+
+    .blob {
+      position: absolute;
+      inset: 0;
+      border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+      animation: morph 8s ease-in-out infinite;
+    }
+
+    .blob-1 {
+      background: var(--red);
+      opacity: 0.12;
+      animation-delay: 0s;
+    }
+
+    .blob-2 {
+      background: var(--ink);
+      opacity: 0.06;
+      animation-delay: -3s;
+      transform: scale(0.8);
+    }
+
+    .blob-3 {
+      background: var(--red);
+      opacity: 0.08;
+      animation-delay: -5s;
+      transform: scale(1.15);
+      border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+    }
+
+    @keyframes morph {
+
+      0%,
+      100% {
+        border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+      }
+
+      25% {
+        border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%;
+      }
+
+      50% {
+        border-radius: 50% 40% 60% 30% / 30% 70% 40% 60%;
+      }
+
+      75% {
+        border-radius: 40% 70% 30% 60% / 70% 30% 60% 40%;
+      }
+    }
+
+    /* Floating number */
+    .blob-label {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+    }
+
+    .blob-num {
+      font-family: 'Clash Display', sans-serif;
+      font-weight: 700;
+      font-size: 120px;
+      line-height: 1;
+      color: var(--ink);
+      opacity: 0.06;
+      user-select: none;
+    }
+
+    .blob-text {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: 22px;
+      color: var(--ink);
+      opacity: 0.5;
+      letter-spacing: 0.05em;
+      margin-top: -24px;
+    }
+
+    /* Vertical text on right */
+    .hero-vert {
+      position: absolute;
+      right: 24px;
+      top: 50%;
+      transform: translateY(-50%) rotate(90deg);
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      color: var(--muted);
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    /* Hero content */
+    .hero-tag {
+      font-size: 11px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--red);
+      margin-bottom: 32px;
       display: flex;
       align-items: center;
       gap: 12px;
-      padding: 11px 12px;
-      cursor: pointer;
-      font-size: 13px;
+      opacity: 0;
+      animation: up 0.9s 0.2s forwards;
+    }
+
+    .hero-tag::before {
+      content: '';
+      width: 24px;
+      height: 1px;
+      background: var(--red);
+    }
+
+    h1 {
+      font-family: 'Clash Display', sans-serif;
+      font-weight: 600;
+      font-size: clamp(52px, 5.5vw, 88px);
+      line-height: 0.92;
+      letter-spacing: -0.02em;
+      margin-bottom: 40px;
+      opacity: 0;
+      animation: up 0.9s 0.4s forwards;
+    }
+
+    h1 .accent {
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      font-style: italic;
+      color: var(--red);
+    }
+
+    h1 .stroke {
+      -webkit-text-stroke: 2px var(--ink);
+      color: transparent;
+    }
+
+    .hero-body {
+      font-size: 16px;
+      line-height: 1.8;
       color: var(--muted);
+      max-width: 400px;
+      margin-bottom: 48px;
+      opacity: 0;
+      animation: up 0.9s 0.6s forwards;
     }
 
-    .nav-item.active {
-      background: var(--warm);
+    .hero-actions {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      opacity: 0;
+      animation: up 0.9s 0.8s forwards;
+    }
+
+    .btn-ink {
+      background: var(--ink);
+      color: var(--white);
+      padding: 16px 36px;
+      border-radius: 2px;
+      text-decoration: none;
+      font-family: 'Epilogue', sans-serif;
+      font-weight: 500;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      transition: all 0.25s;
+      border: 1px solid var(--ink);
+    }
+
+    .btn-ink:hover {
+      background: var(--red);
+      border-color: var(--red);
+    }
+
+    .btn-ghost {
       color: var(--ink);
-      border-left: 2px solid var(--red);
+      text-decoration: none;
+      font-size: 13px;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: gap 0.2s;
     }
 
-    .main {
-      margin-left: 248px;
-      flex: 1;
-      padding: 44px 48px;
+    .btn-ghost:hover {
+      gap: 16px;
     }
 
-    .panel {
-      display: none;
+    .btn-ghost::after {
+      content: '→';
+      color: var(--red);
     }
 
-    .panel.active {
-      display: block;
+    .btn-kit {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 22px;
+      background: transparent;
+      border: 1.5px solid var(--red);
+      color: var(--red);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-decoration: none;
+      border-radius: 2px;
+      transition: all 0.2s;
+      white-space: nowrap;
     }
 
-    .cfg-grid {
+    .btn-kit:hover {
+      background: var(--red);
+      color: #fff;
+    }
+
+    /* Hero counter */
+    .hero-counter {
+      position: absolute;
+      bottom: 48px;
+      left: 48px;
+      display: flex;
+      gap: 48px;
+      opacity: 0;
+      animation: up 0.9s 1s forwards;
+    }
+
+    .hc {}
+
+    .hc-num {
+      font-family: 'Clash Display', sans-serif;
+      font-weight: 600;
+      font-size: 32px;
+      color: var(--ink);
+    }
+
+    .hc-num sup {
+      font-size: 16px;
+    }
+
+    .hc-label {
+      font-size: 11px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    @keyframes up {
+      from {
+        opacity: 0;
+        transform: translateY(28px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* TICKER */
+    .ticker-wrap {
+      background: var(--ink);
+      color: var(--white);
+      padding: 14px 0;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+
+    .ticker {
+      display: inline-flex;
+      gap: 0;
+      animation: ticker 20s linear infinite;
+    }
+
+    .ticker-item {
+      font-family: 'Clash Display', sans-serif;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0 40px;
+    }
+
+    .ticker-dot {
+      color: var(--red);
+    }
+
+    @keyframes ticker {
+      from {
+        transform: translateX(0);
+      }
+
+      to {
+        transform: translateX(-50%);
+      }
+    }
+
+    /* ABOUT */
+    .about {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: 0;
+      min-height: 70vh;
+    }
+
+    .about-left {
+      background: var(--warm);
+      padding: 80px 64px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border-right: 1px solid var(--grey2);
+    }
+
+    .about-right {
+      padding: 80px 64px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .section-index {
+      font-family: 'Clash Display', sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.25em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    h2 {
+      font-family: 'Clash Display', sans-serif;
+      font-weight: 600;
+      font-size: clamp(36px, 3.5vw, 60px);
+      line-height: 1;
+      letter-spacing: -0.02em;
+      margin-bottom: 28px;
+    }
+
+    h2 .it {
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      font-style: italic;
+      color: var(--red);
+    }
+
+    .about-body {
+      font-size: 16px;
+      line-height: 1.85;
+      color: var(--muted);
+      margin-bottom: 40px;
+    }
+
+    .about-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .about-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      font-size: 15px;
+      line-height: 1.6;
+    }
+
+    .about-list li::before {
+      content: '';
+      width: 20px;
+      height: 1px;
+      background: var(--red);
+      margin-top: 12px;
+      flex-shrink: 0;
+    }
+
+    .about-quote {
+      font-family: 'Instrument Serif', serif;
+      font-style: italic;
+      font-size: clamp(28px, 3vw, 48px);
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+      margin-bottom: 32px;
+    }
+
+    .about-quote em {
+      color: var(--red);
+      font-style: normal;
+    }
+
+    /* SERVICES */
+    .services {
+      padding: 100px 48px;
+    }
+
+    .services-head {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 20px;
+      gap: 40px;
+      align-items: end;
+      margin-bottom: 72px;
     }
 
-    .cfg-card {
-      padding: 28px;
-      background: var(--white);
-      border: 1px solid var(--border);
-      border-radius: 2px;
-    }
-
-    .cfg-card-title {
-      font-size: 11px;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
+    .services-desc {
       color: var(--muted);
-      margin-bottom: 20px;
-      border-bottom: 1px solid var(--border);
-      padding-bottom: 12px;
+      font-size: 16px;
+      line-height: 1.8;
     }
 
-    .cfg-field {
-      margin-bottom: 18px;
+    .services-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
     }
 
-    .cfg-field label {
-      display: block;
-      font-size: 11px;
-      text-transform: uppercase;
+    .svc {
+      display: grid;
+      grid-template-columns: 80px 1fr auto;
+      gap: 40px;
+      align-items: center;
+      padding: 32px 0;
+      border-top: 1px solid var(--grey2);
+      transition: all 0.3s;
+      cursor: default;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .svc::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 0;
+      background: var(--warm);
+      z-index: -1;
+      transition: width 0.4s ease;
+    }
+
+    .svc:hover::before {
+      width: 100%;
+    }
+
+    .svc:last-child {
+      border-bottom: 1px solid var(--grey2);
+    }
+
+    .svc-num {
+      font-family: 'Clash Display', sans-serif;
+      font-size: 13px;
       color: var(--muted);
+      letter-spacing: 0.1em;
+    }
+
+    .svc-body h3 {
+      font-family: 'Clash Display', sans-serif;
+      font-weight: 600;
+      font-size: 22px;
       margin-bottom: 6px;
     }
 
-    .cfg-field input,
-    .cfg-field select,
-    .cfg-field textarea {
-      width: 100%;
-      padding: 11px;
-      background: var(--warm);
-      border: 1px solid var(--border);
-      font-family: inherit;
-      font-size: 13px;
-      outline: none;
+    .svc-body p {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
     }
 
-    .cfg-field textarea {
-      min-height: 120px;
-      resize: vertical;
+    .svc-icon {
+      font-size: 28px;
+      opacity: 0.6;
+      transition: opacity 0.3s;
     }
 
-    .skill-badge {
-      background: var(--red);
-      color: white;
-      padding: 2px 6px;
-      border-radius: 2px;
-      font-size: 9px;
-      vertical-align: middle;
-      margin-left: 5px;
+    .svc:hover .svc-icon {
+      opacity: 1;
+      transform: scale(1.15);
     }
 
-    .btn-save {
-      padding: 12px 28px;
+    /* PROCESS */
+    .process {
       background: var(--ink);
-      color: white;
-      border: none;
-      cursor: pointer;
-      font-size: 12px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      transition: 0.2s;
+      color: var(--white);
+      padding: 100px 48px;
     }
 
-    .btn-save:hover {
+    .process h2 {
+      color: var(--white);
+      margin-bottom: 72px;
+    }
+
+    .process h2 .it {
+      color: var(--red);
+    }
+
+    .process-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0;
+      border: 1px solid #2a2a2a;
+    }
+
+    .step {
+      padding: 48px 36px;
+      border-right: 1px solid #2a2a2a;
+      position: relative;
+    }
+
+    .step:last-child {
+      border-right: none;
+    }
+
+    .step-n {
+      font-family: 'Clash Display', sans-serif;
+      font-size: 64px;
+      font-weight: 700;
+      line-height: 1;
+      color: #1a1a1a;
+      margin-bottom: 24px;
+      display: block;
+    }
+
+    .step h3 {
+      font-family: 'Clash Display', sans-serif;
+      font-weight: 600;
+      font-size: 18px;
+      margin-bottom: 12px;
+      color: var(--white);
+    }
+
+    .step p {
+      color: #666;
+      font-size: 14px;
+      line-height: 1.7;
+    }
+
+    .step-tag {
+      display: inline-block;
+      margin-top: 20px;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--red);
+      border: 1px solid var(--red);
+      padding: 4px 10px;
+      border-radius: 2px;
+    }
+
+    /* PRICING */
+    .pricing {
+      padding: 100px 48px;
+      background: var(--white);
+    }
+
+    .pricing-intro {
+      margin-bottom: 72px;
+    }
+
+    .pricing-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+      background: var(--grey2);
+    }
+
+    .pc {
+      background: var(--white);
+      padding: 52px 40px;
+      display: flex;
+      flex-direction: column;
+      transition: background 0.3s;
+    }
+
+    .pc:hover {
+      background: var(--warm);
+    }
+
+    .pc.featured {
+      background: var(--ink);
+      color: var(--white);
+    }
+
+    .pc.featured:hover {
+      background: #1a1a1a;
+    }
+
+    .pc-tier {
+      font-family: 'Clash Display', sans-serif;
+      font-size: 11px;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+
+    .pc.featured .pc-tier {
+      color: #666;
+    }
+
+    .pc-price {
+      font-family: 'Clash Display', sans-serif;
+      font-weight: 700;
+      font-size: 64px;
+      line-height: 1;
+      margin-bottom: 8px;
+      color: var(--ink);
+    }
+
+    .pc.featured .pc-price {
+      color: var(--white);
+    }
+
+    .pc-price sup {
+      font-size: 28px;
+      vertical-align: top;
+      margin-top: 12px;
+    }
+
+    .pc-price span {
+      font-size: 18px;
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .pc.featured .pc-price span {
+      color: #666;
+    }
+
+    .pc-desc {
+      font-size: 14px;
+      color: var(--muted);
+      margin-bottom: 36px;
+      line-height: 1.6;
+    }
+
+    .pc.featured .pc-desc {
+      color: #888;
+    }
+
+    .pc-features {
+      list-style: none;
+      flex: 1;
+      margin-bottom: 36px;
+    }
+
+    .pc-features li {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--grey);
+      font-size: 14px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .pc.featured .pc-features li {
+      border-bottom-color: #2a2a2a;
+      color: #ccc;
+    }
+
+    .pc-features li::before {
+      content: '—';
+      color: var(--red);
+      flex-shrink: 0;
+      font-weight: 700;
+    }
+
+    .pc-features li strong {
+      color: var(--ink);
+    }
+
+    .pc.featured .pc-features li strong {
+      color: var(--white);
+    }
+
+    .pc-btn {
+      display: block;
+      text-align: center;
+      padding: 16px;
+      border: 1px solid var(--ink);
+      color: var(--ink);
+      text-decoration: none;
+      font-family: 'Epilogue', sans-serif;
+      font-weight: 500;
+      font-size: 12px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      transition: all 0.2s;
+      border-radius: 2px;
+    }
+
+    .pc-btn:hover {
+      background: var(--ink);
+      color: var(--white);
+    }
+
+    .pc.featured .pc-btn {
+      border-color: var(--red);
       background: var(--red);
+      color: var(--white);
+    }
+
+    .pc.featured .pc-btn:hover {
+      background: var(--red2);
+    }
+
+    /* BIG STATEMENT */
+    .statement {
+      background: var(--red);
+      color: var(--white);
+      padding: 100px 48px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .statement::before {
+      content: 'CLAW';
+      position: absolute;
+      font-family: 'Clash Display', sans-serif;
+      font-weight: 700;
+      font-size: 300px;
+      color: rgba(255, 255, 255, 0.06);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      white-space: nowrap;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .statement h2 {
+      font-family: 'Clash Display', sans-serif;
+      font-weight: 600;
+      font-size: clamp(40px, 5vw, 80px);
+      letter-spacing: -0.02em;
+      line-height: 1.05;
+      color: var(--white);
+      margin-bottom: 32px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .statement h2 em {
+      font-family: 'Instrument Serif', serif;
+      font-weight: 400;
+      font-style: italic;
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .statement p {
+      font-size: 18px;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 48px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .statement .btn-white {
+      background: var(--white);
+      color: var(--red);
+      padding: 18px 48px;
+      border-radius: 2px;
+      text-decoration: none;
+      font-family: 'Epilogue', sans-serif;
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      transition: all 0.2s;
+      position: relative;
+      z-index: 1;
+      display: inline-block;
+    }
+
+    .statement .btn-white:hover {
+      background: var(--ink);
+      color: var(--white);
+    }
+
+    /* CONTACT */
+    .contact {
+      padding: 100px 48px;
+      background: var(--warm);
+    }
+
+    .contact-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 80px;
+    }
+
+    .contact-left h2 {
+      margin-bottom: 20px;
+    }
+
+    .contact-left p {
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.8;
+      margin-bottom: 40px;
+    }
+
+    .contact-info {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .ci {
+      display: flex;
+      gap: 16px;
+      align-items: center;
+    }
+
+    .ci-label {
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      width: 80px;
+      flex-shrink: 0;
+    }
+
+    .ci-val {
+      font-size: 15px;
+      color: var(--ink);
+    }
+
+    .contact-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .cf-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .cf-group label {
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .cf-group input,
+    .cf-group select,
+    .cf-group textarea {
+      background: var(--white);
+      border: 1px solid var(--grey2);
+      border-radius: 2px;
+      padding: 14px 16px;
+      font-family: 'Epilogue', sans-serif;
+      font-size: 14px;
+      color: var(--ink);
+      outline: none;
+      transition: border-color 0.2s;
+      width: 100%;
+    }
+
+    .cf-group input:focus,
+    .cf-group select:focus,
+    .cf-group textarea:focus {
+      border-color: var(--ink);
+    }
+
+    .cf-group textarea {
+      height: 110px;
+      resize: none;
+    }
+
+    .cf-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .cf-submit {
+      background: var(--ink);
+      color: var(--white);
+      border: none;
+      padding: 16px;
+      border-radius: 2px;
+      cursor: pointer;
+      font-family: 'Epilogue', sans-serif;
+      font-weight: 500;
+      font-size: 13px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      transition: background 0.2s;
+      width: 100%;
+    }
+
+    .cf-submit:hover {
+      background: var(--red);
+    }
+
+    /* FOOTER */
+    footer {
+      background: var(--ink);
+      color: var(--white);
+      padding: 40px 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .f-logo {
+      font-family: 'Clash Display', sans-serif;
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: 0.05em;
+    }
+
+    .f-logo span {
+      color: var(--red);
+    }
+
+    .f-copy {
+      font-size: 12px;
+      color: #555;
+    }
+
+    .f-flag {
+      font-size: 22px;
+    }
+
+    /* REVEAL */
+    .reveal {
+      opacity: 0;
+      transform: translateY(36px);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+
+    .reveal.in {
+      opacity: 1;
+      transform: none;
+    }
+
+    .reveal-left {
+      opacity: 0;
+      transform: translateX(-36px);
+      transition: opacity 0.8s ease, transform 0.8s ease;
+    }
+
+    .reveal-left.in {
+      opacity: 1;
+      transform: none;
+    }
+
+    /* LANG */
+    [data-t] {
+      display: none;
+    }
+
+    [data-t].on {
+      display: block;
+    }
+
+    span[data-t].on {
+      display: inline;
+    }
+
+    a[data-t].on,
+    button[data-t].on {
+      display: inline-block;
+    }
+
+    li[data-t].on {
+      display: flex;
+    }
+
+    p[data-t].on,
+    div[data-t].on,
+    h1[data-t].on,
+    h2[data-t].on,
+    h3[data-t].on {
+      display: block;
+    }
+
+    [data-ti] {
+      display: none;
+    }
+
+    [data-ti].on {
+      display: inline;
+    }
+
+    /* RESPONSIVE */
+    @media(max-width:900px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-right {
+        display: none;
+      }
+
+      nav {
+        padding: 20px 24px;
+      }
+
+      .nav-links>a:not(.nav-cta) {
+        display: none;
+      }
+
+      .hero-left {
+        padding: 120px 24px 80px;
+      }
+
+      .hero-counter {
+        left: 24px;
+        gap: 28px;
+      }
+
+      section,
+      .about-left,
+      .about-right,
+      .contact,
+      .pricing,
+      .services {
+        padding: 60px 24px !important;
+      }
+
+      .about {
+        grid-template-columns: 1fr;
+      }
+
+      .services-head,
+      .contact-grid {
+        grid-template-columns: 1fr;
+        gap: 32px;
+      }
+
+      .process-grid,
+      .pricing-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .step {
+        border-right: none;
+        border-bottom: 1px solid #2a2a2a;
+      }
+
+      footer {
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+      }
+
+      .svc {
+        grid-template-columns: 60px 1fr;
+      }
+
+      .svc-icon {
+        display: none;
+      }
     }
   </style>
 </head>
 
 <body>
-  <div id="app-screen" class="screen active">
-    <div class="sidebar">
-      <div class="sidebar-logo">CLAW <span>AGENCY</span></div>
-      <nav class="sidebar-nav">
-        <div class="nav-item active" onclick="openPanel('dashboard',this)">◈ Dashboard</div>
-        <div class="nav-item" onclick="openPanel('leads',this)">◎ Leads</div>
-        <div class="nav-item" onclick="openPanel('agent',this)">◉ Agent Config</div>
-        <div class="nav-item" onclick="openPanel('pricing',this)">◇ Pricing</div>
-      </nav>
+
+  <!-- NAV -->
+  <nav>
+    <div class="nav-logo"><span class="nav-logo-claw">CLAW</span> AGENCY</div>
+    <div class="nav-links">
+      <a href="#services"><span data-t="fr">Services</span><span data-t="en">Services</span><span
+          data-t="pt">Serviços</span><span data-t="lu">Servicer</span></a>
+      <a href="#pricing"><span data-t="fr">Tarifs</span><span data-t="en">Pricing</span><span
+          data-t="pt">Preços</span><span data-t="lu">Präisser</span></a>
+      <div class="lang-bar">
+        <button class="lb on" data-lang="fr" onclick="setLang('fr')">FR</button>
+        <button class="lb" data-lang="en" onclick="setLang('en')">EN</button>
+        <button class="lb" data-lang="pt" onclick="setLang('pt')">PT</button>
+        <button class="lb" data-lang="lu" onclick="setLang('lu')">LU</button>
+      </div>
+      <a href="./app.html" class="nav-cta"
+        style="background:var(--white)!important; color:var(--ink)!important; border:1px solid var(--border);">Login</a>
+      <a href="#contact" class="nav-cta"><span data-t="fr">Contact</span><span data-t="en">Contact</span><span
+          data-t="pt">Contacto</span><span data-t="lu">Kontakt</span></a>
     </div>
-    <div class="main">
-      <div id="panel-agent" class="panel active">
-        <div class="cfg-grid">
-          <div class="cfg-card">
-            <div class="cfg-card-title">Targeting</div>
-            <div class="cfg-field"><label>Target Sector</label><input type="text" id="cfg-sector"
-                placeholder="e.g. Dental Clinics"></div>
-            <div class="cfg-field"><label>Location</label><input type="text" id="cfg-location"
-                placeholder="e.g. Luxembourg"></div>
-          </div>
-          <div class="cfg-card">
-            <div class="cfg-card-title">Outreach Settings</div>
-            <div class="cfg-field"><label>Language</label><select id="cfg-lang">
-                <option value="en">English</option>
-                <option value="fr">Français</option>
-                <option value="pt">Português</option>
-              </select></div>
-            <div class="cfg-field"><label>Reply-to Email</label><input type="email" id="cfg-reply"
-                placeholder="bernardo@clawagency.online"></div>
-          </div>
-          <div class="cfg-card" style="grid-column: 1/-1">
-            <div class="cfg-card-title">AI Adaptive Writing Skill <span class="skill-badge">ADVANCED</span></div>
-            <div class="cfg-field">
-              <label>Custom Instructions (The Agent's Brain)</label>
-              <textarea id="cfg-instructions"
-                placeholder="Example: Be professional but direct. Mention we are in Luxembourg. Focus on how our AI saves 10 hours of prospecting weekly..."></textarea>
-            </div>
-            <button class="btn-save" onclick="saveConfig()">Save & Sync Skill</button>
-          </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-left">
+      <div class="hero-tag">
+        <span data-t="fr">Agence IA · Luxembourg</span>
+        <span data-t="en">AI Agency · Luxembourg</span>
+        <span data-t="pt">Agência IA · Luxembourg</span>
+        <span data-t="lu">KI Agence · Lëtzebuerg</span>
+      </div>
+
+      <h1>
+        <span data-t="fr">Auto<span class="accent">mati</span>ser<br>le futur<br><span
+            class="stroke">maintenant</span></span>
+        <span data-t="en">Auto<span class="accent">mate</span><br>the future<br><span class="stroke">now</span></span>
+        <span data-t="pt">Auto<span class="accent">mati</span>zar<br>o futuro<br><span
+            class="stroke">agora</span></span>
+        <span data-t="lu">Auto<span class="accent">mati</span>séiert<br>d'Zukunft<br><span
+            class="stroke">elo</span></span>
+      </h1>
+
+      <p class="hero-body">
+        <span data-t="fr">Nous construisons des agents IA qui prospectent, qualifient et convertissent — pendant que
+          vous vous concentrez sur ce qui compte vraiment.</span>
+        <span data-t="en">We build AI agents that prospect, qualify and convert — while you focus on what truly
+          matters.</span>
+        <span data-t="pt">Construímos agentes de IA que prospetam, qualificam e convertem — enquanto você foca no que
+          realmente importa.</span>
+        <span data-t="lu">Mir bauen KI-Agenten, déi prospektéieren, qualifizéieren a konvertéieren.</span>
+      </p>
+
+      <div class="hero-actions">
+        <a href="./app.html" class="btn-ink">
+          <span data-t="fr">Audit gratuit</span>
+          <span data-t="en">Free audit</span>
+          <span data-t="pt">Auditoria grátis</span>
+          <span data-t="lu">Gratis Audit</span>
+        </a>
+        <a href="#services" class="btn-ghost">
+          <span data-t="fr">Explorer</span>
+          <span data-t="en">Explore</span>
+          <span data-t="pt">Explorar</span>
+          <span data-t="lu">Entdecken</span>
+        </a>
+        <a href="https://clawagency.gumroad.com/l/itynbj" target="_blank" class="btn-kit">
+          🎁 Starter Kit — €47
+        </a>
+      </div>
+
+      <div class="hero-counter">
+        <div class="hc">
+          <div class="hc-num">24<sup>/7</sup></div>
+          <div class="hc-label" data-t="fr">Actif</div>
+          <div class="hc-label" data-t="en">Active</div>
+          <div class="hc-label" data-t="pt">Ativo</div>
+          <div class="hc-label" data-t="lu">Aktiv</div>
+        </div>
+        <div class="hc">
+          <div class="hc-num">48<sup>h</sup></div>
+          <div class="hc-label" data-t="fr">Déploiement</div>
+          <div class="hc-label" data-t="en">Deployment</div>
+          <div class="hc-label" data-t="pt">Deploy</div>
+          <div class="hc-label" data-t="lu">Deployment</div>
+        </div>
+        <div class="hc">
+          <div class="hc-num">3×</div>
+          <div class="hc-label" data-t="fr">Plus de leads</div>
+          <div class="hc-label" data-t="en">More leads</div>
+          <div class="hc-label" data-t="pt">Mais leads</div>
+          <div class="hc-label" data-t="lu">Méi Leads</div>
         </div>
       </div>
     </div>
+
+    <div class="hero-right">
+      <div class="hero-right-inner">
+        <div class="blob-wrap">
+          <div class="blob blob-1"></div>
+          <div class="blob blob-2"></div>
+          <div class="blob blob-3"></div>
+          <div class="blob-label">
+            <div class="blob-num">AI</div>
+            <div class="blob-text">always working</div>
+          </div>
+        </div>
+      </div>
+      <div class="hero-vert">Luxembourg · Europe · B2B Automation</div>
+    </div>
+  </section>
+
+  <!-- TICKER -->
+  <div class="ticker-wrap">
+    <div class="ticker">
+      <span class="ticker-item">Prospection automatique</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">AI Lead Generation</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Automação B2B</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Agents IA sur mesure</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Custom AI Agents</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Luxembourg · France · Belgique</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Prospection automatique</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">AI Lead Generation</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Automação B2B</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Agents IA sur mesure</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Custom AI Agents</span><span class="ticker-dot">✦</span>
+      <span class="ticker-item">Luxembourg · France · Belgique</span><span class="ticker-dot">✦</span>
+    </div>
   </div>
+
+  <!-- ABOUT -->
+  <div class="about">
+    <div class="about-left reveal-left">
+      <div class="section-index">00 — <span data-t="fr">Notre approche</span><span data-t="en">Our approach</span><span
+          data-t="pt">Nossa abordagem</span><span data-t="lu">Eise Approche</span></div>
+      <div class="about-quote">
+        <span data-t="fr">L'IA qui<br><em>chasse</em> pour vous,<br>sans jamais dormir.</span>
+        <span data-t="en">AI that<br><em>hunts</em> for you,<br>without ever sleeping.</span>
+        <span data-t="pt">A IA que<br><em>caça</em> por si,<br>sem nunca dormir.</span>
+        <span data-t="lu">KI, déi<br><em>jagt</em> fir Iech,<br>ouni jee ze schlofen.</span>
+      </div>
+      <ul class="about-list">
+        <li data-t="fr">Agents déployés en 48h, prêts à prospecter</li>
+        <li data-t="en">Agents deployed in 48h, ready to prospect</li>
+        <li data-t="pt">Agentes em produção em 48h, prontos para prospectar</li>
+        <li data-t="lu">Agenten a 48h deployeiert, bereet ze prospektéieren</li>
+        <li data-t="fr">Zéro configuration technique requise de votre côté</li>
+        <li data-t="en">Zero technical configuration required on your side</li>
+        <li data-t="pt">Zero configuração técnica necessária da sua parte</li>
+        <li data-t="lu">Null technesch Konfiguratioun vun Ärer Säit néideg</li>
+        <li data-t="fr">Résultats mesurables dès le premier mois</li>
+        <li data-t="en">Measurable results from the first month</li>
+        <li data-t="pt">Resultados mensuráveis desde o primeiro mês</li>
+        <li data-t="lu">Messbar Resultater vum éischte Mount un</li>
+      </ul>
+    </div>
+    <div class="about-right reveal">
+      <div class="section-index">01 — <span data-t="fr">Pourquoi Claw</span><span data-t="en">Why Claw</span><span
+          data-t="pt">Porquê Claw</span><span data-t="lu">Firwat Claw</span></div>
+      <h2><span data-t="fr">Nous ne vendons<br>pas des outils.<br>On livre des <span
+            class="it">résultats.</span></span><span data-t="en">We don't sell<br>tools. We deliver<br><span
+            class="it">results.</span></span><span data-t="pt">Não vendemos<br>ferramentas.<br>Entregamos <span
+            class="it">resultados.</span></span><span data-t="lu">Mir verkafen<br>keng Tools.<br>Mir liwweren <span
+            class="it">Resultater.</span></span></h2>
+      <p class="about-body"><span data-t="fr">Chaque système que nous construisons est taillé pour votre secteur, votre
+          marché, votre langue. Pas de templates génériques. Pas de promesses vides. De l'exécution précise.</span><span
+          data-t="en">Every system we build is tailored to your sector, your market, your language. No generic
+          templates. No empty promises. Precise execution.</span><span data-t="pt">Cada sistema que construímos é feito
+          à medida para o seu setor, mercado e idioma. Sem templates genéricos. Sem promessas vazias. Execução
+          precisa.</span><span data-t="lu">All System, dat mir bauen, ass op Äre Secteur, Äre Maart a Är Sprooch
+          zougeschnidden.</span></p>
+    </div>
+  </div>
+
+  <!-- SERVICES -->
+  <section class="services" id="services">
+    <div class="services-head reveal">
+      <div>
+        <div class="section-index">02 — <span data-t="fr">Ce que nous faisons</span><span data-t="en">What we
+            do</span><span data-t="pt">O que fazemos</span><span data-t="lu">Wat mir maachen</span></div>
+        <h2><span data-t="fr">Six façons<br>de <span class="it">tout changer.</span></span><span data-t="en">Six ways
+            to<br><span class="it">change everything.</span></span><span data-t="pt">Seis formas de<br><span
+              class="it">mudar tudo.</span></span><span data-t="lu">Sechs Weeër<br><span class="it">alles
+              z'änneren.</span></span></h2>
+      </div>
+      <p class="services-desc"><span data-t="fr">Des systèmes IA complets, du scraping de leads à la signature du
+          contrat. Chaque étape automatisée, mesurée, optimisée.</span><span data-t="en">Complete AI systems, from lead
+          scraping to contract signing. Every step automated, measured, optimised.</span><span data-t="pt">Sistemas de
+          IA completos, do scraping de leads à assinatura do contrato. Cada etapa automatizada, medida,
+          otimizada.</span><span data-t="lu">Komplett KI-Systemer, vum Lead-Scraping bis zur
+          Vertragsunterschrëft.</span></p>
+    </div>
+    <div class="services-list reveal">
+      <div class="svc"><span class="svc-num">01</span>
+        <div class="svc-body">
+          <h3 data-t="fr">Prospection IA</h3>
+          <h3 data-t="en">AI Prospecting</h3>
+          <h3 data-t="pt">Prospeção IA</h3>
+          <h3 data-t="lu">KI Prospektéierung</h3>
+          <p data-t="fr">Scanner automatique sur LinkedIn, Google Maps, annuaires. 100–1000 leads qualifiés par mois.
+          </p>
+          <p data-t="en">Automatic scanner across LinkedIn, Google Maps, directories. 100–1000 qualified leads per
+            month.</p>
+          <p data-t="pt">Scanner automático no LinkedIn, Google Maps, diretórios. 100–1000 leads qualificados por mês.
+          </p>
+          <p data-t="lu">Automatesch Scanner op LinkedIn, Google Maps, Verzeichnisser.</p>
+        </div><span class="svc-icon">🎯</span>
+      </div>
+      <div class="svc"><span class="svc-num">02</span>
+        <div class="svc-body">
+          <h3 data-t="fr">Outreach Personnalisé</h3>
+          <h3 data-t="en">Personalised Outreach</h3>
+          <h3 data-t="pt">Outreach Personalizado</h3>
+          <h3 data-t="lu">Personaliséiert Outreach</h3>
+          <p data-t="fr">Emails générés par IA, adaptés à chaque prospect. Séquences multiétapes avec suivi automatique.
+          </p>
+          <p data-t="en">AI-generated emails tailored to each prospect. Multi-step sequences with automatic follow-ups.
+          </p>
+          <p data-t="pt">Emails gerados por IA, adaptados a cada prospeto. Sequências multi-etapa com follow-up
+            automático.</p>
+          <p data-t="lu">KI-generéiert E-Mailen mat automateschen Nofollegen.</p>
+        </div><span class="svc-icon">✉️</span>
+      </div>
+      <div class="svc"><span class="svc-num">03</span>
+        <div class="svc-body">
+          <h3 data-t="fr">Agents Autonomes</h3>
+          <h3 data-t="en">Autonomous Agents</h3>
+          <h3 data-t="pt">Agentes Autónomos</h3>
+          <h3 data-t="lu">Autonom Agenten</h3>
+          <p data-t="fr">CRM automatisé, prise de rendez-vous, réponses aux prospects — sans intervention humaine.</p>
+          <p data-t="en">Automated CRM, appointment booking, prospect responses — without human intervention.</p>
+          <p data-t="pt">CRM automatizado, marcação de reuniões, respostas a prospectos — sem intervenção humana.</p>
+          <p data-t="lu">Automatiséiert CRM, Rendezvous-Buchung ouni mënschlech Interventioun.</p>
+        </div><span class="svc-icon">🤖</span>
+      </div>
+      <div class="svc"><span class="svc-num">04</span>
+        <div class="svc-body">
+          <h3 data-t="fr">Dashboard & Analytics</h3>
+          <h3 data-t="en">Dashboard & Analytics</h3>
+          <h3 data-t="pt">Dashboard & Analytics</h3>
+          <h3 data-t="lu">Dashboard & Analytics</h3>
+          <p data-t="fr">Vue en temps réel de vos KPIs, taux de conversion et rapport Telegram quotidien.</p>
+          <p data-t="en">Real-time view of your KPIs, conversion rates and daily Telegram report.</p>
+          <p data-t="pt">Visão em tempo real dos seus KPIs, taxas de conversão e relatório diário no Telegram.</p>
+          <p data-t="lu">Echtzäit Vue vun Äre KPIs an dagdeeglechen Telegram Rapport.</p>
+        </div><span class="svc-icon">📊</span>
+      </div>
+      <div class="svc"><span class="svc-num">05</span>
+        <div class="svc-body">
+          <h3 data-t="fr">Chatbot Multilingue</h3>
+          <h3 data-t="en">Multilingual Chatbot</h3>
+          <h3 data-t="pt">Chatbot Multilingue</h3>
+          <h3 data-t="lu">Méisproochege Chatbot</h3>
+          <p data-t="fr">Bot IA pour votre site: répond, qualifie, convertit en FR / EN / DE / LU.</p>
+          <p data-t="en">AI bot for your site: responds, qualifies, converts in FR / EN / DE / LU.</p>
+          <p data-t="pt">Bot IA para o seu site: responde, qualifica, converte em FR / EN / DE / LU.</p>
+          <p data-t="lu">KI Bot fir Är Websäit: beäntwert, qualifizéiert, konvertéiert.</p>
+        </div><span class="svc-icon">💬</span>
+      </div>
+      <div class="svc"><span class="svc-num">06</span>
+        <div class="svc-body">
+          <h3 data-t="fr">Intégrations Complètes</h3>
+          <h3 data-t="en">Full Integrations</h3>
+          <h3 data-t="pt">Integrações Completas</h3>
+          <h3 data-t="lu">Komplett Integratioune</h3>
+          <p data-t="fr">CRM, ERP, Slack, WhatsApp, Telegram, calendriers. Tout connecté, rien à changer.</p>
+          <p data-t="en">CRM, ERP, Slack, WhatsApp, Telegram, calendars. Everything connected, nothing to change.</p>
+          <p data-t="pt">CRM, ERP, Slack, WhatsApp, Telegram, calendários. Tudo ligado, nada a mudar.</p>
+          <p data-t="lu">CRM, ERP, Slack, WhatsApp, Telegram. Alles verbonnen, näischt ze änneren.</p>
+        </div><span class="svc-icon">⚡</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- PROCESS -->
+  <section class="process">
+    <div class="section-index" style="color:#555; margin-bottom:16px;">03 — <span data-t="fr">Comment ça
+        marche</span><span data-t="en">How it works</span><span data-t="pt">Como funciona</span><span data-t="lu">Wéi et
+        funktionéiert</span></div>
+    <h2 class="reveal"><span data-t="fr">De la découverte à<br>l'<span class="it">automatisation
+          totale.</span></span><span data-t="en">From discovery to<br><span class="it">total
+          automation.</span></span><span data-t="pt">Da descoberta à<br><span class="it">automação
+          total.</span></span><span data-t="lu">Vun der Entdeckung zur<br><span class="it">totaler
+          Automatisatioun.</span></span></h2>
+    <div class="process-grid reveal">
+      <div class="step"><span class="step-n">01</span>
+        <h3 data-t="fr">Audit Gratuit</h3>
+        <h3 data-t="en">Free Audit</h3>
+        <h3 data-t="pt">Auditoria Grátis</h3>
+        <h3 data-t="lu">Gratis Audit</h3>
+        <p data-t="fr">Analyse de votre processus commercial et identification des leviers d'automatisation à fort
+          impact.</p>
+        <p data-t="en">Analysis of your commercial process and identification of high-impact automation levers.</p>
+        <p data-t="pt">Análise do seu processo comercial e identificação dos alavancas de automação de alto impacto.</p>
+        <p data-t="lu">Analyse vun Ärem kommerziellen Prozess.</p><span class="step-tag">30 min · gratuit</span>
+      </div>
+      <div class="step"><span class="step-n">02</span>
+        <h3 data-t="fr">Configuration</h3>
+        <h3 data-t="en">Setup</h3>
+        <h3 data-t="pt">Configuração</h3>
+        <h3 data-t="lu">Setup</h3>
+        <p data-t="fr">Nous construisons votre agent IA personnalisé selon votre secteur, vos cibles et vos langues.</p>
+        <p data-t="en">We build your personalised AI agent based on your sector, targets and languages.</p>
+        <p data-t="pt">Construímos o seu agente IA personalizado de acordo com o seu setor, alvos e idiomas.</p>
+        <p data-t="lu">Mir bauen Äre personaliséierte KI-Agent no Ärem Secteur.</p><span class="step-tag">24–48h</span>
+      </div>
+      <div class="step"><span class="step-n">03</span>
+        <h3 data-t="fr">Lancement</h3>
+        <h3 data-t="en">Launch</h3>
+        <h3 data-t="pt">Lançamento</h3>
+        <h3 data-t="lu">Launch</h3>
+        <p data-t="fr">Mise en production. Premier scan de leads dans les 24h. Rapport Telegram le soir même.</p>
+        <p data-t="en">Production deployment. First lead scan within 24h. Telegram report the same evening.</p>
+        <p data-t="pt">Deploy em produção. Primeiro scan de leads em 24h. Relatório Telegram na mesma tarde.</p>
+        <p data-t="lu">Produktioun. Éischt Lead Scan a 24h. Telegram Rapport um selwechten Owend.</p><span
+          class="step-tag">J+1</span>
+      </div>
+      <div class="step"><span class="step-n">04</span>
+        <h3 data-t="fr">Optimisation</h3>
+        <h3 data-t="en">Optimisation</h3>
+        <h3 data-t="pt">Otimização</h3>
+        <h3 data-t="lu">Optimisatioun</h3>
+        <p data-t="fr">Suivi mensuel, ajustements IA continus. Votre agent s'améliore chaque semaine.</p>
+        <p data-t="en">Monthly follow-up, continuous AI adjustments. Your agent improves every week.</p>
+        <p data-t="pt">Acompanhamento mensal, ajustes contínuos. O seu agente melhora a cada semana.</p>
+        <p data-t="lu">Méinatlecht Follow-up. Äre Agent verbessert sech all Woch.</p><span
+          class="step-tag">continu</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- PRICING -->
+  <section class="pricing" id="pricing">
+    <div class="pricing-intro reveal">
+      <div class="section-index">04 — <span data-t="fr">Investissement</span><span data-t="en">Investment</span><span
+          data-t="pt">Investimento</span><span data-t="lu">Investissement</span></div>
+      <h2><span data-t="fr">Transparent.<br><span class="it">Sans surprise.</span></span><span
+          data-t="en">Transparent.<br><span class="it">No surprises.</span></span><span
+          data-t="pt">Transparente.<br><span class="it">Sem surpresas.</span></span><span
+          data-t="lu">Transparent.<br><span class="it">Ouni Iwwerraschungen.</span></span></h2>
+    </div>
+    <div class="pricing-grid reveal">
+      <div class="pc">
+        <div class="pc-tier">Starter</div>
+        <div class="pc-price"><sup>€</sup>297<span>/mo</span></div>
+        <p class="pc-desc" data-t="fr">Pour démarrer sans risque</p>
+        <p class="pc-desc" data-t="en">To start without risk</p>
+        <p class="pc-desc" data-t="pt">Para começar sem risco</p>
+        <p class="pc-desc" data-t="lu">Fir ouni Risiko unzefänken</p>
+        <ul class="pc-features">
+          <li><strong data-t="fr">1 Agent IA configuré</strong><strong data-t="en">1 configured AI Agent</strong><strong
+              data-t="pt">1 Agente IA</strong><strong data-t="lu">1 KI-Agent</strong></li>
+          <li data-t="fr">100 leads/mois</li>
+          <li data-t="en">100 leads/month</li>
+          <li data-t="pt">100 leads/mês</li>
+          <li data-t="lu">100 Leads/Mount</li>
+          <li data-t="fr">Emails automatiques</li>
+          <li data-t="en">Automatic emails</li>
+          <li data-t="pt">Emails automáticos</li>
+          <li data-t="lu">Automatesch E-Mailen</li>
+          <li data-t="fr">Rapport Telegram quotidien</li>
+          <li data-t="en">Daily Telegram report</li>
+          <li data-t="pt">Relatório Telegram diário</li>
+          <li data-t="lu">Dagdeegleche Telegram Rapport</li>
+          <li data-t="fr">Support par email</li>
+          <li data-t="en">Email support</li>
+          <li data-t="pt">Suporte por email</li>
+          <li data-t="lu">E-Mail Support</li>
+        </ul>
+        <a href="./app.html" class="pc-btn" data-t="fr">Commencer</a><a href="./app.html" class="pc-btn" data-t="en">Get
+          started</a><a href="./app.html" class="pc-btn" data-t="pt">Começar</a><a href="./app.html" class="pc-btn"
+          data-t="lu">Ufänken</a>
+      </div>
+      <div class="pc featured">
+        <div class="pc-tier">Growth ✦ Popular</div>
+        <div class="pc-price"><sup>€</sup>597<span>/mo</span></div>
+        <p class="pc-desc" data-t="fr">Pour accélérer sérieusement</p>
+        <p class="pc-desc" data-t="en">To accelerate seriously</p>
+        <p class="pc-desc" data-t="pt">Para acelerar a sério</p>
+        <p class="pc-desc" data-t="lu">Fir ernsthaft ze beschleunegen</p>
+        <ul class="pc-features">
+          <li><strong data-t="fr">3 Agents IA configurés</strong><strong data-t="en">3 AI Agents</strong><strong
+              data-t="pt">3 Agentes IA</strong><strong data-t="lu">3 KI-Agenten</strong></li>
+          <li data-t="fr">500 leads/mois</li>
+          <li data-t="en">500 leads/month</li>
+          <li data-t="pt">500 leads/mês</li>
+          <li data-t="lu">500 Leads/Mount</li>
+          <li data-t="fr">Séquences multicanaux</li>
+          <li data-t="en">Multi-channel sequences</li>
+          <li data-t="pt">Sequências multicanal</li>
+          <li data-t="lu">Multi-Kanal Sequenzen</li>
+          <li data-t="fr">Dashboard personnalisé</li>
+          <li data-t="en">Custom dashboard</li>
+          <li data-t="pt">Dashboard personalizado</li>
+          <li data-t="lu">Personaliséiert Dashboard</li>
+          <li><strong data-t="fr">Support prioritaire 24/7</strong><strong data-t="en">Priority support
+              24/7</strong><strong data-t="pt">Suporte prioritário 24/7</strong><strong data-t="lu">Priorität Support
+              24/7</strong></li>
+        </ul>
+        <a href="./app.html" class="pc-btn" data-t="fr">Commencer</a><a href="./app.html" class="pc-btn" data-t="en">Get
+          started</a><a href="./app.html" class="pc-btn" data-t="pt">Começar</a><a href="./app.html" class="pc-btn"
+          data-t="lu">Ufänken</a>
+      </div>
+      <div class="pc">
+        <div class="pc-tier">Enterprise</div>
+        <div class="pc-price"><sup>€</sup>997<span>/mo</span></div>
+        <p class="pc-desc" data-t="fr">Solution complète sur mesure</p>
+        <p class="pc-desc" data-t="en">Complete bespoke solution</p>
+        <p class="pc-desc" data-t="pt">Solução completa à medida</p>
+        <p class="pc-desc" data-t="lu">Komplett Maßlössung</p>
+        <ul class="pc-features">
+          <li><strong data-t="fr">Agents illimités</strong><strong data-t="en">Unlimited agents</strong><strong
+              data-t="pt">Agentes ilimitados</strong><strong data-t="lu">Onlimitéiert Agenten</strong></li>
+          <li data-t="fr">Leads illimités</li>
+          <li data-t="en">Unlimited leads</li>
+          <li data-t="pt">Leads ilimitados</li>
+          <li data-t="lu">Onlimitéiert Leads</li>
+          <li data-t="fr">Intégration CRM complète</li>
+          <li data-t="en">Full CRM integration</li>
+          <li data-t="pt">Integração CRM completa</li>
+          <li data-t="lu">Komplett CRM Integratioun</li>
+          <li><strong data-t="fr">Account manager dédié</strong><strong data-t="en">Dedicated account
+              manager</strong><strong data-t="pt">Gestor de conta dedicado</strong><strong data-t="lu">Dedicated Account
+              Manager</strong></li>
+          <li data-t="fr">API dédiée + White-label</li>
+          <li data-t="en">Dedicated API + White-label</li>
+          <li data-t="pt">API dedicada + White-label</li>
+          <li data-t="lu">Dedicated API + White-label</li>
+        </ul>
+        <a href="./app.html" class="pc-btn" data-t="fr">Nous contacter</a><a href="./app.html" class="pc-btn"
+          data-t="en">Contact us</a><a href="./app.html" class="pc-btn" data-t="pt">Contacte-nos</a><a href="./app.html"
+          class="pc-btn" data-t="lu">Kontaktéiert eis</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- STATEMENT -->
+  <section class="statement">
+    <h2><span data-t="fr">Vos concurrents<br>dorment encore.<br><em>Pas votre agent.</em></span><span data-t="en">Your
+        competitors<br>are still sleeping.<br><em>Not your agent.</em></span><span data-t="pt">Os seus
+        concorrentes<br>ainda dormem.<br><em>O seu agente não.</em></span><span data-t="lu">Är Konkurrenten<br>schlofen
+        nach.<br><em>Net Äre Agent.</em></span></h2>
+    <p><span data-t="fr">Pendant que vous lisez ceci, votre futur agent scanne déjà vos premiers prospects.</span><span
+        data-t="en">While you read this, your future agent is already scanning your first prospects.</span><span
+        data-t="pt">Enquanto lê isto, o seu futuro agente já está a analisar os seus primeiros prospectos.</span><span
+        data-t="lu">Wärend Dir dëst liist, scannt Äre kënftege Agent schonn Är éischt Prospekten.</span></p>
+    <a href="./app.html" class="btn-white"><span data-t="fr">Démarrer maintenant</span><span data-t="en">Start
+        now</span><span data-t="pt">Começar agora</span><span data-t="lu">Elo ufänken</span></a>
+  </section>
+
+  <!-- CONTACT -->
+  <section class="contact" id="contact">
+    <div class="contact-grid">
+      <div class="contact-left reveal-left">
+        <div class="section-index">05 — Contact</div>
+        <h2><span data-t="fr">Parlons de<br>votre <span class="it">projet.</span></span><span data-t="en">Let's
+            talk<br>about your <span class="it">project.</span></span><span data-t="pt">Vamos falar<br>do seu <span
+              class="it">projeto.</span></span><span data-t="lu">Loosst eis iwwer<br>Äre <span class="it">Projet</span>
+            schwätzen.</span></h2>
+        <p><span data-t="fr">Audit gratuit de 30 minutes. On analyse votre situation et on vous dit honnêtement si l'IA
+            peut vous aider — et comment.</span><span data-t="en">Free 30-minute audit. We analyse your situation and
+            tell you honestly if AI can help you — and how.</span><span data-t="pt">Auditoria gratuita de 30 minutos.
+            Analisamos a sua situação e dizemos-lhe honestamente se a IA pode ajudar — e como.</span><span
+            data-t="lu">Gratis 30-Minutten Audit. Mir analyséieren Är Situatioun an soen Iech éierlech wéi KI hëllefe
+            kann.</span></p>
+        <div class="contact-info">
+          <div class="ci"><span class="ci-label">Email</span><span class="ci-val"><a href="/cdn-cgi/l/email-protection"
+                class="__cf_email__"
+                data-cfemail="b9dad5d8ce97d8dedcd7dac097d1c8f9ded4d8d0d597dad6d4">[email&#160;protected]</a></span>
+          </div>
+          <div class="ci"><span class="ci-label"><span data-t="fr">Basé à</span><span data-t="en">Based in</span><span
+                data-t="pt">Baseado em</span><span data-t="lu">Zu</span></span><span class="ci-val">Luxembourg
+              🇱🇺</span></div>
+          <div class="ci"><span class="ci-label"><span data-t="fr">Marchés</span><span data-t="en">Markets</span><span
+                data-t="pt">Mercados</span><span data-t="lu">Märten</span></span><span class="ci-val">LU · FR · BE · PT
+              · ES</span></div>
+        </div>
+      </div>
+      <div class="reveal">
+        <form class="contact-form" action="https://formspree.io/f/meeroynb" method="POST"
+          onsubmit="handleFormSubmit(event)">
+          <div class="cf-row">
+            <div class="cf-group"><label data-t="fr">Prénom</label><label data-t="en">First name</label><label
+                data-t="pt">Nome</label><label data-t="lu">Virnumm</label><input type="text" name="name"
+                placeholder="Jean" required></div>
+            <div class="cf-group"><label data-t="fr">Entreprise</label><label data-t="en">Company</label><label
+                data-t="pt">Empresa</label><label data-t="lu">Entreprise</label><input type="text" name="company"
+                placeholder="Acme S.A."></div>
+          </div>
+          <div class="cf-group"><label>Email</label><input type="email" name="email" placeholder="jean@acme.lu"
+              required></div>
+          <div class="cf-group">
+            <label data-t="fr">Secteur</label><label data-t="en">Sector</label><label data-t="pt">Setor</label><label
+              data-t="lu">Secteur</label>
+            <select name="sector">
+              <option value="Clinique dentaire">Clinique dentaire / Dental clinic</option>
+              <option value="Immobilier">Immobilier / Real estate</option>
+              <option value="Finance & Conseil">Finance & Conseil / Consulting</option>
+              <option value="Autre">Autre / Other</option>
+            </select>
+          </div>
+          <div class="cf-group"><label data-t="fr">Message</label><label data-t="en">Message</label><label
+              data-t="pt">Mensagem</label><label data-t="lu">Message</label><textarea name="message"
+              placeholder="..."></textarea></div>
+          <div id="form-success"
+            style="display:none; color:#27ae60; font-size:14px; padding:12px; border:1px solid #27ae60; border-radius:4px; text-align:center;">
+          </div>
+          <button type="submit" class="cf-submit" id="cf-btn"><span data-t="fr">Réserver mon audit gratuit →</span><span
+              data-t="en">Book my free audit →</span><span data-t="pt">Reservar auditoria grátis →</span><span
+              data-t="lu">Mäin gratis Audit reservéieren →</span></button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="f-logo"><span>CLAW</span> AGENCY</div>
+    <div class="f-copy">© 2026 Claw Agency · Luxembourg</div>
+    <div class="f-flag">🇱🇺</div>
+  </footer>
+
+  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script>
   <script>
-    const API = 'https://claw-agency-production.up.railway.app';
-    async function saveConfig() {
-      const btn = event.target; btn.textContent = 'SYNCING...';
-      const config = {
-        sector: document.getElementById('cfg-sector').value,
-        location: document.getElementById('cfg-location').value,
-        language: document.getElementById('cfg-lang').value,
-        reply_email: document.getElementById('cfg-reply').value,
-        instructions: document.getElementById('cfg-instructions').value
-      };
-      try {
-        const token = localStorage.getItem('claw_token');
-        await fetch(`${API}/api/agent-config`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-          body: JSON.stringify(config)
-        });
-        alert('Skill Synced Successfully!');
-      } catch (e) { alert('Sync Error'); }
-      btn.textContent = 'SAVE & SYNC SKILL';
+let cl = 'fr';
+
+function setLang(l) {
+  cl = l;
+
+  // 1. Update button active state
+  document.querySelectorAll('.lb').forEach(b => {
+    b.classList.remove('on');
+    if (b.getAttribute('data-lang') === l) b.classList.add('on');
+  });
+
+  // 2. Hide ALL data-t elements first
+  document.querySelectorAll('[data-t]').forEach(el => {
+    el.style.display = 'none';
+  });
+
+  // 3. Show only the ones matching current lang
+  document.querySelectorAll('[data-t="' + l + '"]').forEach(el => {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'span' || tag === 'a' || tag === 'label') {
+      el.style.display = 'inline';
+    } else if (tag === 'li') {
+      el.style.display = 'flex';
+    } else {
+      el.style.display = 'block';
     }
-    function openPanel(name, el) {
-      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
-      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-      document.getElementById('panel-' + name).classList.add('active');
-      el.classList.add('active');
+  });
+}
+
+// Init on load
+document.addEventListener('DOMContentLoaded', () => setLang('fr'));
+
+// REVEAL
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  });
+}, { threshold: 0.08 });
+document.querySelectorAll('.reveal, .reveal-left').forEach(el => io.observe(el));
+
+// FORM
+async function handleFormSubmit(e) {
+  e.preventDefault();
+  const form = e.target;
+  const btn = document.getElementById('cf-btn');
+  const success = document.getElementById('form-success');
+  const m = { fr:'✅ Message envoyé! Nous vous répondons dans 24h.', en:'✅ Message sent! We will reply within 24h.', pt:'✅ Mensagem enviada! Resposta em 24h.', lu:'✅ Message geschéckt! Äntwert a 24h.' };
+  btn.disabled = true;
+  btn.style.opacity = '0.6';
+  try {
+    const data = new FormData(form);
+    const response = await fetch(form.action, { method: 'POST', body: data, headers: { 'Accept': 'application/json' } });
+    if (response.ok) {
+      success.textContent = m[cl];
+      success.style.display = 'block';
+      btn.style.display = 'none';
+      form.reset();
+    } else {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      alert('Erreur. Veuillez réessayer.');
     }
+  } catch(err) {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+  }
+}
   </script>
 </body>
 
