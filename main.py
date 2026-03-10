@@ -1,15 +1,135 @@
 import os
 import logging
 import threading
+import re
 import requests
 from datetime import datetime
 from flask import Flask, jsonify, request
+from groq import Groq
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
+
+# Cliente Groq global (inicializado sob demanda)
+groq_client = None
+
+
+# ---------------- PLAYWRIGHT SNIPER (APPLY ASSISTIDO) ----------------
+def run_upwork_sniper(job_url: str, proposal_text: str) -> None:
+    """
+    Abre a URL exata da vaga no Upwork, garante login
+    e tenta chegar até o campo de cover letter para colar o texto.
+    Não clica em "Submit" – você revisa e envia manualmente.
+    """
+    from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+
+    email = os.getenv("UPWORK_EMAIL")
+    password = os.getenv("UPWORK_PASSWORD")
+
+    if not email or not password:
+        log.warning("UPWORK_EMAIL/UPWORK_PASSWORD não configurados; sniper não será executado.")
+        return
+
+    try:
+        log.info(f"🎯 [SNIPER] Abrindo vaga específica no Upwork: {job_url}")
+        with sync_playwright() as p:
+            user_data_dir = "./upwork_profile"
+            context = p.chromium.launch_persistent_context(
+                user_data_dir,
+                headless=True,
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/122.0.0.0 Safari/537.36"
+                ),
+            )
+            page = context.new_page()
+
+            # 1) Abre a página da vaga
+            page.goto(job_url, wait_until="domcontentloaded", timeout=60000)
+
+            # 2) Se cair na tela de login, tenta autenticar
+            current_url = page.url.lower()
+            if "login" in current_url or "log-in" in current_url:
+                log.info("🔐 [SNIPER] Tela de login detectada, tentando autenticar...")
+                try:
+                    page.fill('input[name="username"]', email, timeout=15000)
+                except PlaywrightTimeoutError:
+                    # Tentativa alternativa de seletor
+                    try:
+                        page.fill('input#login_username', email, timeout=15000)
+                    except PlaywrightTimeoutError:
+                        log.warning("Não foi possível encontrar campo de email no Upwork.")
+                try:
+                    page.click('button[type="submit"]', timeout=15000)
+                except PlaywrightTimeoutError:
+                    log.warning("Não foi possível clicar no botão de continuar login (email).")
+
+                # Campo de senha
+                try:
+                    page.fill('input[type="password"]', password, timeout=20000)
+                    page.click('button[type="submit"]', timeout=15000)
+                except PlaywrightTimeoutError:
+                    log.warning("Não foi possível preencher/clicar no campo de senha.")
+
+            # 3) Tenta achar e clicar em "Submit a proposal"
+            try:
+                submit_button = None
+                # Botão com texto "Submit a proposal"
+                for locator in [
+                    'button:has-text("Submit a proposal")',
+                    'a:has-text("Submit a proposal")',
+                ]:
+                    try:
+                        submit_button = page.locator(locator).first
+                        if submit_button and submit_button.is_enabled():
+                            break
+                    except Exception:
+                        continue
+
+                if submit_button:
+                    log.info("📝 [SNIPER] Clicando em 'Submit a proposal'...")
+                    submit_button.click(timeout=30000)
+                else:
+                    log.warning("[SNIPER] Não encontrei botão 'Submit a proposal'. Apenas deixei a vaga aberta.")
+
+            except Exception as e:
+                log.warning(f"[SNIPER] Erro ao tentar clicar em 'Submit a proposal': {e}")
+
+            # 4) Tenta localizar o campo de cover letter e colar a proposta
+            try:
+                textarea = None
+                possible_selectors = [
+                    'textarea[name="coverLetter"]',
+                    'textarea[data-qa="cover-letter-textarea"]',
+                    'textarea',
+                ]
+                for sel in possible_selectors:
+                    try:
+                        t = page.locator(sel).first
+                        if t and t.is_visible():
+                            textarea = t
+                            break
+                    except Exception:
+                        continue
+
+                if textarea:
+                    log.info("✍️ [SNIPER] Colando proposta no campo de cover letter (sem enviar).")
+                    textarea.fill(proposal_text[:4000])  # limite de segurança
+                else:
+                    log.warning("[SNIPER] Não consegui localizar o campo de cover letter.")
+
+            except Exception as e:
+                log.warning(f"[SNIPER] Erro ao tentar preencher cover letter: {e}")
+
+            # Mantém o contexto salvo (cookies/sessão) e fecha
+            context.close()
+        log.info("✅ [SNIPER] Execução concluída (texto colado se campos foram encontrados).")
+    except Exception as e:
+        log.error(f"❌ [SNIPER] Erro crítico no sniper do Upwork: {e}")
 
 
 # ---------------- CORS & SECURITY ----------------
@@ -96,17 +216,38 @@ def get_jobs_from_apify():
         ]
 
     try:
-        # Chamada simples para rodar o Actor via API HTTP
-        url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={apify_token}"
-        resp = requests.post(url, json={}, timeout=30)
+        # 1) Dispara o Actor e espera ele terminar
+        url = (
+            f"https://api.apify.com/v2/acts/{actor_id}/runs"
+            f"?token={apify_token}&waitForFinish=120000&timeout=120000"
+        )
+        resp = requests.post(url, json={}, timeout=130)
         resp.raise_for_status()
-        run = resp.json().get("data", {})
+        data = resp.json().get("data", {}) or {}
 
-        # Aqui você pode adaptar para ler o dataset gerado pelo Actor.
-        # Por enquanto, assume que o Actor devolve jobs direto no campo "items".
-        items = run.get("items") or []
+        status = data.get("status")
+        if status not in {"SUCCEEDED", "SUCCEEDED_WITH_WARNINGS"}:
+            log.warning(f"Run do Apify terminou com status {status}.")
+
+        dataset_id = data.get("defaultDatasetId")
+        if not dataset_id:
+            log.warning("Run do Apify não retornou defaultDatasetId.")
+            return []
+
+        # 2) Lê os items do dataset desse run
+        items_url = (
+            f"https://api.apify.com/v2/datasets/{dataset_id}/items"
+            f"?token={apify_token}&clean=true&format=json"
+        )
+        items_resp = requests.get(items_url, timeout=60)
+        items_resp.raise_for_status()
+        items = items_resp.json()
+
         if not items:
-            log.warning("Apify retornou sem items, usando lista vazia.")
+            log.warning("Dataset do Apify veio vazio.")
+        else:
+            log.info(f"Apify retornou {len(items)} vagas.")
+
         return items
     except Exception as e:
         log.error(f"Erro ao chamar Apify: {e}")
@@ -150,31 +291,23 @@ def generate_smart_proposal(job_title: str, job_description: str) -> str:
     )
 
     try:
-        headers = {
-            "Authorization": f"Bearer {groq_api_key}",
-            "Content-Type": "application/json",
-        }
-        payload = {
-            "model": "llama3-8b-8192",
-            "messages": [
+        global groq_client
+        if groq_client is None:
+            groq_client = Groq(api_key=groq_api_key)
+
+        chat_completion = groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": "Escreva a proposta agora."},
             ],
-            "temperature": 0.7,
-            "max_tokens": 300,
-        }
-
-        response = requests.post(
-            "https://api.groq.com/openai/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=30,
+            temperature=0.7,
+            max_tokens=300,
         )
-        response.raise_for_status()
-        data = response.json()
-        return data["choices"][0]["message"]["content"]
+
+        return chat_completion.choices[0].message.content
     except Exception as e:
-        log.error(f"Erro no Groq: {e}")
+        log.error(f"Erro no Groq (SDK): {e}")
         return "Olá, vi a sua vaga e tenho a experiência técnica necessária para ajudar. Podemos falar?"
 
 
@@ -189,6 +322,8 @@ def run_claw_mission():
             return
 
         send_telegram(f"✅ Encontrei {len(jobs)} vagas alvo. A gerar propostas com IA...")
+
+        enable_sniper = os.getenv("ENABLE_SNIPER_AUTO", "false").lower() == "true"
 
         for job in jobs[:3]:
             title = job.get("title", "Sem título")
@@ -206,6 +341,14 @@ def run_claw_mission():
                 f"🔗 *Ação:* Vá ao Upwork para copiar e colar!"
             )
             send_telegram(mensagem)
+
+            # Opcional: ativar sniper automático via variável de ambiente
+            if enable_sniper and url.startswith("http"):
+                threading.Thread(
+                    target=run_upwork_sniper,
+                    args=(url, proposal),
+                    daemon=True,
+                ).start()
 
         log.info("✅ Missão finalizada com sucesso.")
 
