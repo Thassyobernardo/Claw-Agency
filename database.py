@@ -1,5 +1,6 @@
 import os
 import logging
+import json
 import psycopg2
 from sqlalchemy import create_engine, text
 
@@ -31,21 +32,46 @@ def get_db_connection():
 def init_db():
     engine = get_engine()
     with engine.connect() as conn:
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS leads (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(255), email VARCHAR(255), phone VARCHAR(50),
-                sector VARCHAR(100), location VARCHAR(100),
-                score INTEGER DEFAULT 0, status VARCHAR(50) DEFAULT 'novo',
-                source VARCHAR(100), notes TEXT, skill_used VARCHAR(100),
-                created_at TIMESTAMP DEFAULT NOW()
+        # Tabela leads — se já existir com outro schema, fazemos ALTER para garantir colunas necessárias.
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS leads (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(255),
+                    email VARCHAR(255),
+                    phone VARCHAR(50),
+                    sector VARCHAR(100),
+                    location VARCHAR(100),
+                    score INTEGER DEFAULT 0,
+                    status VARCHAR(50) DEFAULT 'novo',
+                    source VARCHAR(100),
+                    notes TEXT,
+                    skill_used VARCHAR(100),
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+                """
             )
-        """))
-        try:
-            conn.execute(text("ALTER TABLE leads ADD COLUMN skill_used VARCHAR(100)"))
-        except Exception as e:
-            if "already exists" not in str(e).lower():
-                log.warning(f"ALTER leads.skill_used: {e}")
+        )
+        for col_def in [
+            "ADD COLUMN IF NOT EXISTS name VARCHAR(255)",
+            "ADD COLUMN IF NOT EXISTS email VARCHAR(255)",
+            "ADD COLUMN IF NOT EXISTS phone VARCHAR(50)",
+            "ADD COLUMN IF NOT EXISTS sector VARCHAR(100)",
+            "ADD COLUMN IF NOT EXISTS location VARCHAR(100)",
+            "ADD COLUMN IF NOT EXISTS score INTEGER DEFAULT 0",
+            "ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'novo'",
+            "ADD COLUMN IF NOT EXISTS source VARCHAR(100)",
+            "ADD COLUMN IF NOT EXISTS notes TEXT",
+            "ADD COLUMN IF NOT EXISTS skill_used VARCHAR(100)",
+            "ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()",
+        ]:
+            try:
+                conn.execute(text(f"ALTER TABLE leads {col_def}"))
+            except Exception as e:
+                msg = str(e).lower()
+                if "already exists" not in msg:
+                    log.warning(f"ALTER leads ({col_def}): {e}")
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS emails_sent (
                 id SERIAL PRIMARY KEY, lead_id INTEGER,
@@ -53,12 +79,18 @@ def init_db():
                 opened BOOLEAN DEFAULT FALSE, replied BOOLEAN DEFAULT FALSE
             )
         """))
-        conn.execute(text("""
-            CREATE TABLE IF NOT EXISTS agent_logs (
-                id SERIAL PRIMARY KEY, action VARCHAR(100),
-                details TEXT, created_at TIMESTAMP DEFAULT NOW()
+        conn.execute(
+            text(
+                """
+                CREATE TABLE IF NOT EXISTS agent_logs (
+                    id SERIAL PRIMARY KEY,
+                    action VARCHAR(100),
+                    details JSONB,
+                    created_at TIMESTAMP DEFAULT NOW()
+                )
+                """
             )
-        """))
+        )
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS security_log (
                 id SERIAL PRIMARY KEY, threat_type VARCHAR(50),
@@ -158,6 +190,31 @@ def get_cold_emails_sent_today():
         log.error(f"get_cold_emails_sent_today error: {e}")
         return 0
 
+
+def is_job_already_processed(job_url: str) -> bool:
+    """
+    Verifica se já existe um lead associado a esta vaga (mesmo URL),
+    para evitar processar / mandar proposta duas vezes para o mesmo job.
+    """
+    if not job_url:
+        return False
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            n = conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*) FROM leads
+                    WHERE notes = :url_exact OR notes LIKE :url_like
+                    """
+                ),
+                {"url_exact": job_url, "url_like": f"%{job_url}%"},
+            ).scalar()
+            return bool(n and n > 0)
+    except Exception as e:
+        log.error(f"is_job_already_processed error: {e}")
+        return False
+
 def get_leads(limit=50):
     try:
         engine = get_engine()
@@ -213,8 +270,15 @@ def log_action(action, details=""):
     try:
         engine = get_engine()
         with engine.connect() as conn:
-            conn.execute(text("INSERT INTO agent_logs (action, details) VALUES (:action, :details)"),
-                        {"action": action, "details": details})
+            # Garante JSON válido mesmo quando details é só uma string.
+            if isinstance(details, (dict, list)):
+                details_json = json.dumps(details)
+            else:
+                details_json = json.dumps({"message": str(details)})
+            conn.execute(
+                text("INSERT INTO agent_logs (action, details) VALUES (:action, :details)"),
+                {"action": action, "details": details_json},
+            )
             conn.commit()
     except Exception as e:
         log.error(f"log_action error: {e}")

@@ -16,6 +16,7 @@ from database import (
     get_upwork_proposals_count_today,
     get_other_platforms_proposals_count_today,
     get_cold_emails_sent_today,
+    is_job_already_processed,
 )
 from config.skills import get_skill_for_job
 from config.quotas import (
@@ -457,6 +458,11 @@ def run_claw_mission():
             url = job.get("url", "Sem URL")
             platform = job.get("platform", "upwork")
 
+            # Se já mandámos proposta / salvámos lead para esta vaga, pula.
+            if url and is_job_already_processed(url):
+                log.info(f"⏭️ Vaga já processada anteriormente. Pulando: {title[:80]} | {url}")
+                continue
+
             # Upwork: só peixes grandes (min budget) e limite 3/dia
             if platform == "upwork":
                 if upwork_today >= UPWORK_MAX_PROPOSALS_PER_DAY:
@@ -684,6 +690,11 @@ def jobs_feed():
             _ensure_job_format(j)
 
             platform = (j.get("platform") or "").lower()
+            url = j.get("url") or ""
+
+            # Não exibir vagas que já foram processadas (já existem em leads).
+            if url and is_job_already_processed(url):
+                continue
             if platform == "upwork":
                 budget_usd = parse_budget_to_usd(j.get("budget"))
                 # Se conseguir ler orçamento, aplica filtro "peixes grandes".
