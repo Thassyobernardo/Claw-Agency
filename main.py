@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import os
 import logging
 import threading
@@ -335,6 +336,7 @@ def generate_manual_upwork_package(
     job_title: str,
     job_description: str,
     budget_range: str | None,
+    language: str | None = None,
     skill: dict | None = None,
 ) -> dict:
     """
@@ -362,26 +364,41 @@ def generate_manual_upwork_package(
         "um especialista em automação, dashboards e projetos de dados focado em entregar valor rápido."
     )
 
-    system_prompt = (
-        f"Você é {persona}. Você vai ajudar um freelancer a responder um formulário de proposta do Upwork.\n"
-        f"Vaga: '{job_title}'.\n"
-        f"Descrição: '''{job_description}'''\n"
-        f"Faixa de orçamento/hora informada pelo cliente (se houver): '{budget_range or 'N/A'}'.\n\n"
-        "Sua saída DEVE ser um JSON válido, apenas JSON, no seguinte formato:\n"
-        "{\n"
-        '  \"cover_letter\": \"texto\",\n'
-        '  \"recent_experience\": \"texto\",\n'
-        '  \"frameworks\": \"texto\",\n'
-        '  \"qa_approach\": \"texto\",\n'
-        '  \"bid_rate\": \"50.00\",\n'
-        '  \"bid_explanation\": \"texto curto explicando o porquê desta taxa\"\n'
-        "}\n\n"
-        "Regras:\n"
-        "- Use o mesmo idioma da vaga (Inglês / Espanhol / Português).\n"
-        "- Cover letter curta, direta e focada em resultados.\n"
-        "- As respostas devem parecer escritas por um humano senior, mas sem floreios demais.\n"
-        "- NUNCA inclua email, telefone ou links externos (GitHub/LinkedIn) na cover letter.\n"
-    )
+    lang = (language or "").strip().lower()
+    lang_hint = {
+        "en": "English",
+        "pt": "Português",
+        "es": "Español",
+        "fr": "Français",
+        "de": "Deutsch",
+    }.get(lang, "")
+
+    parts = [
+        f"You are {persona}. You help a freelancer fill an Upwork proposal form.\n",
+        f"Job title: '{job_title}'.\n",
+        f"Job description: '''{job_description}'''\n",
+        f"Client budget/rate range (if provided): '{budget_range or 'N/A'}'.\n\n",
+    ]
+    if lang_hint:
+        parts.append(f"Output language (mandatory): {lang_hint}.\n")
+        parts.append("If an output language is provided, respond ONLY in that language.\n\n")
+    parts += [
+        "Your output MUST be valid JSON only, in the following format:\n",
+        "{\n",
+        '  "cover_letter": "text",\n',
+        '  "recent_experience": "text",\n',
+        '  "frameworks": "text",\n',
+        '  "qa_approach": "text",\n',
+        '  "bid_rate": "50.00",\n',
+        '  "bid_explanation": "short explanation for the bid"\n',
+        "}\n\n",
+        "Rules:\n",
+        "- If an output language is provided, use it. Otherwise match the job language.\n",
+        "- Keep the cover letter short, direct, and outcome-driven.\n",
+        "- Sound like a senior human. No fluff.\n",
+        "- Do NOT include email, phone, or external links in the cover letter.\n",
+    ]
+    system_prompt = "".join(parts)
 
     try:
         global groq_client
@@ -655,12 +672,15 @@ def manual_proposal():
         description = (data.get("description") or "").strip()
         budget = (data.get("budget_range") or "").strip()
         url = (data.get("url") or "").strip()
+        language = (data.get("language") or "").strip()
 
         if not title and not description:
             return jsonify({"error": "title or description required"}), 400
 
         skill = get_skill_for_job(title, description)
-        package = generate_manual_upwork_package(title, description, budget, skill=skill)
+        package = generate_manual_upwork_package(
+            title, description, budget, language=language, skill=skill
+        )
 
         # Salva lead manual para histórico / My Approvals
         if url and not is_job_already_processed(url):
@@ -692,11 +712,150 @@ def manual_proposal():
                 "title": title,
                 "url": url,
                 "skill_id": skill.get("id", ""),
+                "language": language,
                 "package": package,
             }
         ), 200
     except Exception as e:
         log.error(f"/api/manual-proposal error: {e}")
+        return jsonify({"error": "internal_error"}), 500
+
+
+def generate_project_plan(
+    project_type: str,
+    job_title: str,
+    job_description: str,
+    proposal_text: str,
+    language: str | None,
+    skill: dict | None = None,
+) -> dict:
+    """
+    Gera plano de execução para quando a proposta for aprovada.
+    Retorna JSON com summary/scope/checklist/stack/timeline.
+    """
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
+        return {"summary": "", "scope": "", "checklist": "", "stack": "", "timeline": ""}
+
+    persona = (skill or {}).get("persona") or (
+        "um tech lead senior que transforma um briefing em plano executável."
+    )
+    ptype = (project_type or "").strip().lower() or "general"
+
+    lang = (language or "").strip().lower()
+    lang_hint = {
+        "en": "English",
+        "pt": "Português",
+        "es": "Español",
+        "fr": "Français",
+        "de": "Deutsch",
+    }.get(lang, "")
+
+    parts = [
+        f"You are {persona}.\n",
+        f"Project type: {ptype}.\n",
+        f"Title: {job_title}\n",
+        f"Brief/Description: '''{job_description}'''\n",
+        f"Proposal sent: '''{proposal_text}'''\n\n",
+    ]
+    if lang_hint:
+        parts.append(f"Output language (mandatory): {lang_hint}.\n")
+    parts += [
+        "Output MUST be valid JSON only in the format:\n",
+        "{\n",
+        '  "summary": "short 1-paragraph client alignment",\n',
+        '  "scope": "scope bullets (features + integrations)",\n',
+        '  "checklist": "technical checklist steps (bullets)",\n',
+        '  "stack": "recommended stack (bullets)",\n',
+        '  "timeline": "simple timeline (e.g., Day 1-2, Day 3-4...)"\n',
+        "}\n\n",
+        "Rules:\n",
+        "- Be extremely practical and executable.\n",
+        "- Do not assume access; list dependencies/credentials needed.\n",
+        "- Do not include external links or contact details.\n",
+    ]
+    system_prompt = "".join(parts)
+
+    try:
+        global groq_client
+        if groq_client is None:
+            groq_client = Groq(api_key=groq_api_key)
+        chat = groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "Gere o JSON agora."},
+            ],
+            temperature=0.6,
+            max_tokens=800,
+        )
+        raw = chat.choices[0].message.content or "{}"
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start != -1 and end != -1:
+            raw = raw[start : end + 1]
+        data = json.loads(raw)
+        return {
+            "summary": (data.get("summary") or "").strip(),
+            "scope": (data.get("scope") or "").strip(),
+            "checklist": (data.get("checklist") or "").strip(),
+            "stack": (data.get("stack") or "").strip(),
+            "timeline": (data.get("timeline") or "").strip(),
+        }
+    except Exception as e:
+        log.error(f"[PLAN] Erro ao gerar project plan: {e}")
+        return {"summary": "", "scope": "", "checklist": "", "stack": "", "timeline": ""}
+
+
+@app.route("/api/project-plan", methods=["POST"])
+def project_plan():
+    """
+    Gera plano de execução (pós-aprovação).
+    Body: { project_type, title, description, proposal, language, url? }
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        title = (data.get("title") or "").strip()
+        description = (data.get("description") or "").strip()
+        proposal = (data.get("proposal") or "").strip()
+        project_type = (data.get("project_type") or "").strip()
+        language = (data.get("language") or "").strip()
+        url = (data.get("url") or "").strip()
+
+        if not title and not description:
+            return jsonify({"error": "title or description required"}), 400
+
+        skill = get_skill_for_job(title, description)
+        plan = generate_project_plan(
+            project_type=project_type,
+            job_title=title,
+            job_description=description,
+            proposal_text=proposal,
+            language=language,
+            skill=skill,
+        )
+
+        # Log + histórico (sem duplicar por url)
+        try:
+            log_action(
+                "project_plan_generated",
+                {"title": title, "url": url, "type": project_type, "skill": skill.get("id", "")},
+            )
+        except Exception as e:
+            log.warning(f"[PLAN] log_action falhou: {e}")
+
+        return jsonify(
+            {
+                "title": title,
+                "url": url,
+                "skill_id": skill.get("id", ""),
+                "language": language,
+                "project_type": project_type,
+                "plan": plan,
+            }
+        ), 200
+    except Exception as e:
+        log.error(f"/api/project-plan error: {e}")
         return jsonify({"error": "internal_error"}), 500
 
 
