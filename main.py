@@ -592,6 +592,31 @@ def jobs_feed():
         limit = int(request.args.get("limit", 20))
         limit = max(1, min(limit, 100))
         include_mock = (request.args.get("include_mock", "false").lower() == "true")
+        debug = (request.args.get("debug", "false").lower() == "true")
+
+        debug_info = None
+        if debug:
+            # Executa cada fonte separadamente para diagnosticar rapidamente.
+            debug_info = {
+                "env": {
+                    "has_apify_token": bool(os.getenv("APIFY_TOKEN")),
+                    "apify_actor_id": os.getenv("APIFY_ACTOR_ID") or "",
+                    "remoteok_actor_id": os.getenv("REMOTEOK_ACTOR_ID") or "",
+                    "linkedin_actor_id": os.getenv("LINKEDIN_ACTOR_ID") or "",
+                },
+                "sources": {},
+            }
+
+            def _run_source(name: str, fn):
+                try:
+                    items = fn() or []
+                    return {"ok": True, "count": len(items), "error": None}
+                except Exception as e:
+                    return {"ok": False, "count": 0, "error": str(e)[:300]}
+
+            debug_info["sources"]["upwork"] = _run_source("upwork", get_jobs_from_apify)
+            debug_info["sources"]["remoteok"] = _run_source("remoteok", get_jobs_from_remoteok)
+            debug_info["sources"]["linkedin"] = _run_source("linkedin", get_jobs_from_linkedin)
 
         jobs = get_jobs_from_sources()
 
@@ -630,6 +655,7 @@ def jobs_feed():
                     "returned": len(filtered),
                     "upwork_min_budget_usd": UPWORK_MIN_BUDGET_USD,
                 },
+                "debug": debug_info,
             }
         ), 200
     except Exception as e:
