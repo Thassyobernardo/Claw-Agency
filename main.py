@@ -605,6 +605,7 @@ def jobs_feed():
                     "linkedin_actor_id": os.getenv("LINKEDIN_ACTOR_ID") or "",
                 },
                 "sources": {},
+                "apify_runs": {},
             }
 
             def _run_source(name: str, fn):
@@ -617,6 +618,45 @@ def jobs_feed():
             debug_info["sources"]["upwork"] = _run_source("upwork", get_jobs_from_apify)
             debug_info["sources"]["remoteok"] = _run_source("remoteok", get_jobs_from_remoteok)
             debug_info["sources"]["linkedin"] = _run_source("linkedin", get_jobs_from_linkedin)
+
+            # Diagnóstico extra: detalhes do último run disparado agora (Upwork/RemoteOK/LinkedIn).
+            # Nota: os métodos get_jobs_* já fazem 1 run. Aqui repetimos APENAS para debug quando solicitado.
+            def _apify_run_diag(actor_env_key: str):
+                token = os.getenv("APIFY_TOKEN")
+                actor_id = os.getenv(actor_env_key) or ""
+                if not token or not actor_id:
+                    return {"ok": False, "error": f"Missing {actor_env_key} or APIFY_TOKEN"}
+                try:
+                    run_url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={token}&waitForFinish=120000&timeout=120000"
+                    resp = requests.post(run_url, json={}, timeout=130)
+                    resp.raise_for_status()
+                    data = resp.json().get("data", {}) or {}
+                    run_id = data.get("id") or ""
+                    dataset_id = data.get("defaultDatasetId") or ""
+                    status = data.get("status") or ""
+                    status_message = data.get("statusMessage") or ""
+                    items_count = 0
+                    if dataset_id:
+                        items_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?token={token}&clean=true&format=json"
+                        items_resp = requests.get(items_url, timeout=60)
+                        items_resp.raise_for_status()
+                        items = items_resp.json() or []
+                        items_count = len(items)
+                    return {
+                        "ok": True,
+                        "actor_id": actor_id,
+                        "run_id": run_id,
+                        "dataset_id": dataset_id,
+                        "status": status,
+                        "status_message": status_message[:200],
+                        "items_count": items_count,
+                    }
+                except Exception as e:
+                    return {"ok": False, "actor_id": actor_id, "error": str(e)[:300]}
+
+            debug_info["apify_runs"]["upwork"] = _apify_run_diag("APIFY_ACTOR_ID")
+            debug_info["apify_runs"]["remoteok"] = _apify_run_diag("REMOTEOK_ACTOR_ID")
+            debug_info["apify_runs"]["linkedin"] = _apify_run_diag("LINKEDIN_ACTOR_ID")
 
         jobs = get_jobs_from_sources()
 
