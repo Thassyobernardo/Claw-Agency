@@ -116,7 +116,7 @@ def get_stats():
         return {"leads": 0, "emails_sent": 0, "scans_today": 0}
 
 def get_upwork_proposals_count_today():
-    """Quantas propostas Upwork já foram enviadas hoje (para respeitar limite 3–5/dia)."""
+    """Quantas propostas Upwork já foram enviadas hoje (limite 3/dia — peixes grandes)."""
     try:
         engine = get_engine()
         with engine.connect() as conn:
@@ -127,6 +127,35 @@ def get_upwork_proposals_count_today():
             return n or 0
     except Exception as e:
         log.error(f"get_upwork_proposals_count_today error: {e}")
+        return 0
+
+def get_other_platforms_proposals_count_today():
+    """Quantas propostas em volume (Remote OK, LinkedIn, WWR) já foram enviadas hoje (limite 16/dia)."""
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            n = conn.execute(text("""
+                SELECT COUNT(*) FROM leads
+                WHERE source IN ('apify_remoteok', 'apify_linkedin', 'apify_wwr')
+                  AND created_at::date = CURRENT_DATE
+            """)).scalar()
+            return n or 0
+    except Exception as e:
+        log.error(f"get_other_platforms_proposals_count_today error: {e}")
+        return 0
+
+def get_cold_emails_sent_today():
+    """Quantos cold emails (Maps) foram enviados hoje (limite 20/dia)."""
+    try:
+        engine = get_engine()
+        with engine.connect() as conn:
+            n = conn.execute(text("""
+                SELECT COUNT(*) FROM emails_sent
+                WHERE sent_at::date = CURRENT_DATE
+            """)).scalar()
+            return n or 0
+    except Exception as e:
+        log.error(f"get_cold_emails_sent_today error: {e}")
         return 0
 
 def get_leads(limit=50):

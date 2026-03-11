@@ -4,7 +4,7 @@ import threading
 import re
 import requests
 from datetime import datetime
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from groq import Groq
 from database import (
     get_stats,
@@ -14,8 +14,18 @@ from database import (
     save_lead,
     log_action,
     get_upwork_proposals_count_today,
+    get_other_platforms_proposals_count_today,
+    get_cold_emails_sent_today,
 )
 from config.skills import get_skill_for_job
+from config.quotas import (
+    UPWORK_MAX_PROPOSALS_PER_DAY,
+    UPWORK_MIN_BUDGET_USD,
+    OTHER_PLATFORMS_MAX_PER_DAY,
+    COLD_EMAIL_MAPS_MAX_PER_DAY,
+    parse_budget_to_usd,
+    OTHER_PLATFORM_SOURCES,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 log = logging.getLogger(__name__)
@@ -320,19 +330,102 @@ def generate_smart_proposal(
 
 
 # ---------------- FONTES DE VAGAS (multi-plataforma) ----------------
+def _ensure_job_format(j: dict) -> None:
+    """Normaliza campos de job (Store LinkedIn/Remote OK podem usar nomes diferentes)."""
+    if not j.get("title") and j.get("jobTitle"):
+        j["title"] = j["jobTitle"]
+    if not j.get("title") and j.get("position"):
+        j["title"] = j["position"]
+    if not j.get("url") and j.get("jobUrl"):
+        j["url"] = j["jobUrl"]
+    if not j.get("url") and j.get("link"):
+        j["url"] = j["link"]
+    if not j.get("description") and j.get("jobDescription"):
+        j["description"] = j["jobDescription"]
+    j.setdefault("title", j.get("title") or "Sem título")
+    j.setdefault("description", j.get("description") or "")
+    j.setdefault("budget", j.get("budget") or "N/A")
+    j.setdefault("url", j.get("url") or "")
+
+
+def get_jobs_from_remoteok():
+    """
+    Remote OK — volume diário, 100% robô. Envia para tudo que encaixe (ex.: Data Analyst).
+    Configure REMOTEOK_ACTOR_ID + APIFY_TOKEN para usar um Actor Apify que raspe Remote OK.
+    """
+    token = os.getenv("APIFY_TOKEN")
+    actor_id = os.getenv("REMOTEOK_ACTOR_ID")
+    if not token or not actor_id:
+        return []
+    try:
+        url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={token}&waitForFinish=120000&timeout=120000"
+        resp = requests.post(url, json={}, timeout=130)
+        resp.raise_for_status()
+        data = resp.json().get("data", {}) or {}
+        dataset_id = data.get("defaultDatasetId")
+        if not dataset_id:
+            return []
+        items_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?token={token}&clean=true&format=json"
+        items_resp = requests.get(items_url, timeout=60)
+        items_resp.raise_for_status()
+        items = items_resp.json() or []
+        for j in items:
+            j["platform"] = "remoteok"
+            _ensure_job_format(j)
+        log.info(f"Remote OK retornou {len(items)} vagas.")
+        return items
+    except Exception as e:
+        log.warning(f"Remote OK: {e}")
+        return []
+
+
+def get_jobs_from_linkedin():
+    """
+    LinkedIn — volume diário. Configure LINKEDIN_ACTOR_ID + APIFY_TOKEN para um Actor que raspe vagas LinkedIn.
+    """
+    token = os.getenv("APIFY_TOKEN")
+    actor_id = os.getenv("LINKEDIN_ACTOR_ID")
+    if not token or not actor_id:
+        return []
+    try:
+        url = f"https://api.apify.com/v2/acts/{actor_id}/runs?token={token}&waitForFinish=120000&timeout=120000"
+        resp = requests.post(url, json={}, timeout=130)
+        resp.raise_for_status()
+        data = resp.json().get("data", {}) or {}
+        dataset_id = data.get("defaultDatasetId")
+        if not dataset_id:
+            return []
+        items_url = f"https://api.apify.com/v2/datasets/{dataset_id}/items?token={token}&clean=true&format=json"
+        items_resp = requests.get(items_url, timeout=60)
+        items_resp.raise_for_status()
+        items = items_resp.json() or []
+        for j in items:
+            j["platform"] = "linkedin"
+            _ensure_job_format(j)
+        log.info(f"LinkedIn retornou {len(items)} vagas.")
+        return items
+    except Exception as e:
+        log.warning(f"LinkedIn: {e}")
+        return []
+
+
 def get_jobs_from_sources():
     """
-    Agrega vagas de todas as fontes (Upwork via Apify + futuros sites).
-    Cada item fica com 'platform': 'upwork' | 'freelancer' | etc.
+    Agrega vagas: Upwork (peixes grandes) + Remote OK + LinkedIn (volume).
+    Cada item tem 'platform': 'upwork' | 'remoteok' | 'linkedin'.
     """
     jobs = []
-    # Upwork (Apify)
-    apify_jobs = get_jobs_from_apify()
-    for j in apify_jobs:
+    # Upwork (Apify) — peixes grandes
+    for j in get_jobs_from_apify():
         j = dict(j)
-        j["platform"] = j.get("platform") or "upwork"
+        j["platform"] = "upwork"
         jobs.append(j)
-    # Futuro: jobs += get_jobs_from_freelancer() etc.
+    # Volume: Remote OK
+    for j in get_jobs_from_remoteok():
+        jobs.append(dict(j))
+    # Volume: LinkedIn
+    for j in get_jobs_from_linkedin():
+        jobs.append(dict(j))
     return jobs
 
 
@@ -346,12 +439,16 @@ def run_claw_mission():
             send_telegram("⚠️ Nenhuma vaga encontrada desta vez.")
             return
 
-        send_telegram(f"✅ Encontrei {len(jobs)} vagas. Gerando propostas com a skill certa para cada uma...")
+        send_telegram(
+            f"✅ Encontrei {len(jobs)} vagas. "
+            f"Upwork (peixes grandes): max {UPWORK_MAX_PROPOSALS_PER_DAY}/dia. "
+            f"Volume (Remote OK/LinkedIn): max {OTHER_PLATFORMS_MAX_PER_DAY}/dia."
+        )
 
         enable_sniper = os.getenv("ENABLE_SNIPER_AUTO", "false").lower() == "true"
-        upwork_max = int(os.getenv("UPWORK_MAX_PROPOSALS_PER_DAY", "5"))
         upwork_today = get_upwork_proposals_count_today()
-        max_jobs_this_run = int(os.getenv("CLAW_MAX_JOBS_PER_RUN", "5"))
+        other_today = get_other_platforms_proposals_count_today()
+        max_jobs_this_run = int(os.getenv("CLAW_MAX_JOBS_PER_RUN", "20"))
 
         for job in jobs[:max_jobs_this_run]:
             title = job.get("title", "Sem título")
@@ -360,15 +457,26 @@ def run_claw_mission():
             url = job.get("url", "Sem URL")
             platform = job.get("platform", "upwork")
 
-            # Limite Upwork: 3–5 propostas/dia para manter perfil seguro
-            if platform == "upwork" and upwork_today >= upwork_max:
-                log.info(f"⏸️ Limite Upwork atingido hoje ({upwork_today}/{upwork_max}). Pulando: {title[:50]}...")
-                continue
+            # Upwork: só peixes grandes (min budget) e limite 3/dia
+            if platform == "upwork":
+                if upwork_today >= UPWORK_MAX_PROPOSALS_PER_DAY:
+                    log.info(f"⏸️ Limite Upwork atingido hoje ({upwork_today}/{UPWORK_MAX_PROPOSALS_PER_DAY}). Pulando: {title[:50]}...")
+                    continue
+                budget_usd = parse_budget_to_usd(budget)
+                if budget_usd is not None and budget_usd < UPWORK_MIN_BUDGET_USD:
+                    log.info(f"⏸️ Upwork: orçamento ${budget_usd} < ${UPWORK_MIN_BUDGET_USD} (peixes grandes). Pulando: {title[:50]}...")
+                    continue
+
+            # Volume (Remote OK / LinkedIn): limite 16/dia
+            if platform in ("remoteok", "linkedin", "wwr"):
+                if other_today >= OTHER_PLATFORMS_MAX_PER_DAY:
+                    log.info(f"⏸️ Limite volume atingido hoje ({other_today}/{OTHER_PLATFORMS_MAX_PER_DAY}). Pulando: {title[:50]}...")
+                    continue
 
             skill = get_skill_for_job(title, description)
             proposal = generate_smart_proposal(title, description, skill=skill)
 
-            platform_label = "Upwork" if platform == "upwork" else platform
+            platform_label = {"upwork": "Upwork", "remoteok": "Remote OK", "linkedin": "LinkedIn", "wwr": "WWR"}.get(platform, platform)
             mensagem = (
                 f"🎯 *NOVO LEAD* ({platform_label})\n\n"
                 f"🛠 *Skill:* {skill.get('name', skill.get('id', '?'))}\n"
@@ -380,7 +488,7 @@ def run_claw_mission():
             )
             send_telegram(mensagem)
 
-            source_db = "apify_upwork" if platform == "upwork" else f"apify_{platform}"
+            source_db = f"apify_{platform}"
             try:
                 save_lead(
                     name=title[:255] if title else f"{platform_label} Lead",
@@ -399,6 +507,8 @@ def run_claw_mission():
 
             if platform == "upwork":
                 upwork_today += 1
+            elif platform in ("remoteok", "linkedin", "wwr"):
+                other_today += 1
 
             # Sniper só para Upwork (URL conhecida)
             if platform == "upwork" and enable_sniper and url.startswith("http"):
@@ -469,9 +579,98 @@ def my_leads():
         return jsonify([]), 500
 
 
+@app.route("/api/jobs", methods=["GET"])
+def jobs_feed():
+    """
+    Retorna vagas agregadas (Upwork + RemoteOK + LinkedIn via Apify).
+
+    Query params:
+      - limit: int (default 20, max 100)
+      - include_mock: true/false (default false) — útil para testar sem Apify configurado
+    """
+    try:
+        limit = int(request.args.get("limit", 20))
+        limit = max(1, min(limit, 100))
+        include_mock = (request.args.get("include_mock", "false").lower() == "true")
+
+        jobs = get_jobs_from_sources()
+
+        # Normaliza + filtra "peixes grandes" no Upwork
+        filtered = []
+        for j in jobs:
+            j = dict(j or {})
+            _ensure_job_format(j)
+
+            platform = (j.get("platform") or "").lower()
+            if platform == "upwork":
+                budget_usd = parse_budget_to_usd(j.get("budget"))
+                # Se não conseguir ler orçamento, descarta (foco peixes grandes)
+                if budget_usd is None:
+                    continue
+                if budget_usd < UPWORK_MIN_BUDGET_USD:
+                    continue
+                j["budget_usd"] = budget_usd
+
+            filtered.append(j)
+
+        # Se Apify não estiver configurado, Upwork volta mock; deixa opcional incluir isso
+        if not include_mock:
+            filtered = [j for j in filtered if not str(j.get("url", "")).startswith("https://www.upwork.com/jobs/~example")]
+
+        # Limita saída
+        filtered = filtered[:limit]
+
+        return jsonify(
+            {
+                "jobs": filtered,
+                "meta": {
+                    "limit": limit,
+                    "returned": len(filtered),
+                    "upwork_min_budget_usd": UPWORK_MIN_BUDGET_USD,
+                },
+            }
+        ), 200
+    except Exception as e:
+        log.error(f"/api/jobs error: {e}")
+        return jsonify({"jobs": [], "meta": {"returned": 0, "error": str(e)}}), 500
+
+
+@app.route("/api/quotas", methods=["GET"])
+def quotas():
+    """
+    Quotas diárias: Upwork (peixes grandes), volume (Remote OK/LinkedIn), Cold Email (Maps).
+    Use para o painel ou para validar antes de enviar cold email (max 20/dia).
+    """
+    try:
+        return jsonify({
+            "upwork": {
+                "sent_today": get_upwork_proposals_count_today(),
+                "max_per_day": UPWORK_MAX_PROPOSALS_PER_DAY,
+                "min_budget_usd": UPWORK_MIN_BUDGET_USD,
+            },
+            "other_platforms": {
+                "sent_today": get_other_platforms_proposals_count_today(),
+                "max_per_day": OTHER_PLATFORMS_MAX_PER_DAY,
+            },
+            "cold_email_maps": {
+                "sent_today": get_cold_emails_sent_today(),
+                "max_per_day": COLD_EMAIL_MAPS_MAX_PER_DAY,
+            },
+        }), 200
+    except Exception as e:
+        log.error(f"/api/quotas: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok", "agent": "claw", "time": datetime.utcnow().isoformat()}), 200
+
+
+@app.route("/app", methods=["GET"])
+def serve_dashboard():
+    """Serve o painel CLAW (frontend) para que /api/* fique no mesmo domínio."""
+    return send_from_directory(os.path.dirname(os.path.abspath(__file__)), "app.html", mimetype="text/html")
 
 
 @app.route("/", methods=["GET"])

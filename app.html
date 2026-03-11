@@ -72,18 +72,19 @@
     <div id="app-dashboard">
         <div class="sidebar">
             <div class="logo">CLAW <span>COPILOT</span></div>
-            <div class="nav-item active">🎯 Live Job Feed</div>
-            <div class="nav-item">✅ My Approvals</div>
-            <div class="nav-item">🤖 Agent Factory</div>
-            <div class="nav-item">💰 Revenue Tracker</div>
+            <div class="nav-item active" data-section="feed" onclick="switchSection('feed')">🎯 Live Job Feed</div>
+            <div class="nav-item" data-section="approvals" onclick="switchSection('approvals')">✅ My Approvals</div>
+            <div class="nav-item" data-section="factory" onclick="switchSection('factory')">🤖 Agent Factory</div>
+            <div class="nav-item" data-section="revenue" onclick="switchSection('revenue')">💰 Revenue Tracker</div>
             <a href="/" class="nav-item" style="margin-top: auto; text-decoration: none; border-left: none;">← Exit to Public Site</a>
         </div>
         <div class="main">
             <div class="header">
-                <h1>Pending Approvals (Drafts)</h1>
-                <div style="color: var(--dim); font-size: 14px;">Status: <span style="color: var(--accent);">Scanning Global Opportunities...</span></div>
+                <h1 id="panel-title">Pending Approvals (Drafts)</h1>
+                <div style="color: var(--dim); font-size: 14px;" id="panel-subtitle">Status: <span style="color: var(--accent);">Scanning Global Opportunities...</span></div>
             </div>
 
+            <div id="panel-feed" class="panel">
             <div class="job-feed" id="feed">
                 <div class="job-card" id="job-1">
                     <div class="job-header">
@@ -137,10 +138,109 @@
                     </div>
                 </div>
             </div>
+            </div>
+
+            <div id="panel-approvals" class="panel" style="display: none;">
+                <div class="job-feed" id="approvals-list"></div>
+            </div>
+
+            <div id="panel-factory" class="panel" style="display: none;">
+                <div class="job-card" style="max-width: 600px;">
+                    <div class="job-title">🤖 Agent Factory</div>
+                    <p style="color: var(--dim); margin: 0;">Skills ativas: Analista de Dados, Dev Sênior, PM TI, Automação, Full‑stack. O orquestrador escolhe a skill por vaga. Configuração avançada em breve.</p>
+                </div>
+            </div>
+
+            <div id="panel-revenue" class="panel" style="display: none;">
+                <div class="job-feed" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px;">
+                    <div class="job-card" id="stat-leads">
+                        <div class="job-title" style="font-size: 14px; color: var(--dim);">Total de leads</div>
+                        <div style="font-size: 32px; font-weight: 600; color: var(--accent);" id="stat-leads-n">—</div>
+                    </div>
+                    <div class="job-card" id="stat-week">
+                        <div class="job-title" style="font-size: 14px; color: var(--dim);">Novos esta semana</div>
+                        <div style="font-size: 32px; font-weight: 600; color: var(--accent);" id="stat-week-n">—</div>
+                    </div>
+                    <div class="job-card" id="stat-emails">
+                        <div class="job-title" style="font-size: 14px; color: var(--dim);">E-mails enviados</div>
+                        <div style="font-size: 32px; font-weight: 600; color: var(--accent);" id="stat-emails-n">—</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
+        const API_BASE = ''; // Se o front estiver noutro domínio, use ex: 'https://seu-app.railway.app'
+
+        function switchSection(section) {
+            document.querySelectorAll('.nav-item[data-section]').forEach(el => {
+                el.classList.toggle('active', el.getAttribute('data-section') === section);
+            });
+            document.querySelectorAll('.panel').forEach(p => p.style.display = 'none');
+            const panel = document.getElementById('panel-' + section);
+            if (panel) panel.style.display = 'block';
+
+            const titles = { feed: 'Pending Approvals (Drafts)', approvals: 'My Approvals', factory: 'Agent Factory', revenue: 'Revenue Tracker' };
+            const subtitles = { feed: 'Status: <span style="color: var(--accent);">Scanning Global Opportunities...</span>', approvals: 'Leads enviados / aprovados', factory: 'Skills e configuração', revenue: 'Métricas do CLAW' };
+            document.getElementById('panel-title').textContent = titles[section] || '';
+            document.getElementById('panel-subtitle').innerHTML = subtitles[section] || '';
+
+            if (section === 'approvals') loadApprovals();
+            if (section === 'revenue') loadRevenue();
+        }
+
+        async function loadApprovals() {
+            const container = document.getElementById('approvals-list');
+            container.innerHTML = '<p style="color: var(--dim);">A carregar...</p>';
+            try {
+                const res = await fetch(API_BASE + '/api/my-leads?limit=50');
+                const data = await res.json();
+                if (!Array.isArray(data) || data.length === 0) {
+                    container.innerHTML = '<p style="color: var(--dim);">Nenhum lead ainda. Use Live Job Feed e aprova propostas para preencher.</p>';
+                    return;
+                }
+                container.innerHTML = data.map(l => `
+                    <div class="job-card">
+                        <div class="job-header">
+                            <div>
+                                <div class="job-title">${escapeHtml(l.name || 'Sem nome')}</div>
+                                <div class="job-meta">
+                                    <span>${escapeHtml(l.source || '')}</span>
+                                    <span>${escapeHtml(l.sector || '')}</span>
+                                    <span>${l.skill_used ? 'Skill: ' + escapeHtml(l.skill_used) : ''}</span>
+                                </div>
+                            </div>
+                        </div>
+                        ${l.notes ? '<div class="ai-solution" style="font-size: 12px;">' + escapeHtml(l.notes).slice(0, 200) + '</div>' : ''}
+                    </div>
+                `).join('');
+            } catch (e) {
+                container.innerHTML = '<p style="color: var(--danger);">Erro ao carregar leads. Verifique se o backend está no ar e CORS.</p>';
+            }
+        }
+
+        async function loadRevenue() {
+            try {
+                const res = await fetch(API_BASE + '/api/my-stats');
+                const data = await res.json();
+                document.getElementById('stat-leads-n').textContent = data.total_leads ?? '—';
+                document.getElementById('stat-week-n').textContent = data.new_this_week ?? '—';
+                document.getElementById('stat-emails-n').textContent = data.emails_sent ?? '—';
+            } catch (e) {
+                document.getElementById('stat-leads-n').textContent = '—';
+                document.getElementById('stat-week-n').textContent = '—';
+                document.getElementById('stat-emails-n').textContent = '—';
+            }
+        }
+
+        function escapeHtml(s) {
+            if (s == null) return '';
+            const div = document.createElement('div');
+            div.textContent = s;
+            return div.innerHTML;
+        }
+
         // Função de Login
         function verifyLogin(e) {
             e.preventDefault();
