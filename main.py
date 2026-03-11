@@ -2,6 +2,7 @@ import os
 import logging
 import threading
 import re
+import json
 import requests
 from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory
@@ -330,6 +331,99 @@ def generate_smart_proposal(
         return "Olá, vi a sua vaga e tenho a experiência técnica necessária para ajudar. Podemos falar?"
 
 
+def generate_manual_upwork_package(
+    job_title: str,
+    job_description: str,
+    budget_range: str | None,
+    skill: dict | None = None,
+) -> dict:
+    """
+    Gera um pacote completo de resposta para formulário do Upwork manual:
+    - cover_letter
+    - recent_experience
+    - frameworks
+    - qa_approach
+    - bid_rate
+    - bid_explanation
+    """
+    log.info(f"🧠 [MANUAL] Gerando pacote Upwork para: {job_title}")
+    groq_api_key = os.getenv("GROQ_API_KEY")
+    if not groq_api_key:
+        return {
+            "cover_letter": "Olá, vi a sua vaga e tenho a experiência técnica necessária para ajudar. Podemos falar?",
+            "recent_experience": "",
+            "frameworks": "",
+            "qa_approach": "",
+            "bid_rate": "",
+            "bid_explanation": "",
+        }
+
+    persona = (skill or {}).get("persona") or (
+        "um especialista em automação, dashboards e projetos de dados focado em entregar valor rápido."
+    )
+
+    system_prompt = (
+        f"Você é {persona}. Você vai ajudar um freelancer a responder um formulário de proposta do Upwork.\n"
+        f"Vaga: '{job_title}'.\n"
+        f"Descrição: '''{job_description}'''\n"
+        f"Faixa de orçamento/hora informada pelo cliente (se houver): '{budget_range or 'N/A'}'.\n\n"
+        "Sua saída DEVE ser um JSON válido, apenas JSON, no seguinte formato:\n"
+        "{\n"
+        '  \"cover_letter\": \"texto\",\n'
+        '  \"recent_experience\": \"texto\",\n'
+        '  \"frameworks\": \"texto\",\n'
+        '  \"qa_approach\": \"texto\",\n'
+        '  \"bid_rate\": \"50.00\",\n'
+        '  \"bid_explanation\": \"texto curto explicando o porquê desta taxa\"\n'
+        "}\n\n"
+        "Regras:\n"
+        "- Use o mesmo idioma da vaga (Inglês / Espanhol / Português).\n"
+        "- Cover letter curta, direta e focada em resultados.\n"
+        "- As respostas devem parecer escritas por um humano senior, mas sem floreios demais.\n"
+        "- NUNCA inclua email, telefone ou links externos (GitHub/LinkedIn) na cover letter.\n"
+    )
+
+    try:
+        global groq_client
+        if groq_client is None:
+            groq_client = Groq(api_key=groq_api_key)
+
+        chat_completion = groq_client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": "Gere o JSON agora."},
+            ],
+            temperature=0.7,
+            max_tokens=600,
+        )
+        raw = chat_completion.choices[0].message.content or "{}"
+        start = raw.find("{")
+        end = raw.rfind("}")
+        if start != -1 and end != -1:
+            raw = raw[start : end + 1]
+        data = json.loads(raw)
+        return {
+            "cover_letter": data.get("cover_letter", "").strip(),
+            "recent_experience": data.get("recent_experience", "").strip(),
+            "frameworks": data.get("frameworks", "").strip(),
+            "qa_approach": data.get("qa_approach", "").strip(),
+            "bid_rate": str(data.get("bid_rate", "")).strip(),
+            "bid_explanation": data.get("bid_explanation", "").strip(),
+        }
+    except Exception as e:
+        log.error(f"[MANUAL] Erro ao gerar pacote Upwork: {e}")
+        base = generate_smart_proposal(job_title, job_description, skill=skill)
+        return {
+            "cover_letter": base,
+            "recent_experience": "",
+            "frameworks": "",
+            "qa_approach": "",
+            "bid_rate": "",
+            "bid_explanation": "",
+        }
+
+
 # ---------------- FONTES DE VAGAS (multi-plataforma) ----------------
 def _ensure_job_format(j: dict) -> None:
     """Normaliza campos de job (Store LinkedIn/Remote OK podem usar nomes diferentes)."""
@@ -416,17 +510,19 @@ def get_jobs_from_sources():
     Cada item tem 'platform': 'upwork' | 'remoteok' | 'linkedin'.
     """
     jobs = []
-    # Upwork (Apify) — peixes grandes
+    # Upwork (Apify) — peixes grandes (freelance/projeto)
     for j in get_jobs_from_apify():
         j = dict(j)
         j["platform"] = "upwork"
         jobs.append(j)
-    # Volume: Remote OK
+
+    # Remote OK ainda entra como fonte secundária (enquanto não
+    # tivermos um actor real de Workana/Contra só para freelance).
     for j in get_jobs_from_remoteok():
         jobs.append(dict(j))
-    # Volume: LinkedIn
-    for j in get_jobs_from_linkedin():
-        jobs.append(dict(j))
+
+    # LinkedIn continua desativado (precisa de actor dedicado + conta paga).
+
     return jobs
 
 
@@ -540,6 +636,68 @@ def handle_action():
     log.info("🚀 COMANDO RECEBIDO DO PAINEL! Orquestrador iniciando...")
     threading.Thread(target=run_claw_mission, daemon=True).start()
     return jsonify({"status": "started"}), 200
+
+
+@app.route("/api/manual-proposal", methods=["POST"])
+def manual_proposal():
+    """
+    Gera pacote de respostas para uma vaga manual (ex.: Upwork):
+    - cover_letter
+    - recent_experience
+    - frameworks
+    - qa_approach
+    - bid_rate
+    - bid_explanation
+    """
+    try:
+        data = request.get_json(silent=True) or {}
+        title = (data.get("title") or "").strip()
+        description = (data.get("description") or "").strip()
+        budget = (data.get("budget_range") or "").strip()
+        url = (data.get("url") or "").strip()
+
+        if not title and not description:
+            return jsonify({"error": "title or description required"}), 400
+
+        skill = get_skill_for_job(title, description)
+        package = generate_manual_upwork_package(title, description, budget, skill=skill)
+
+        # Salva lead manual para histórico / My Approvals
+        if url and not is_job_already_processed(url):
+            try:
+                save_lead(
+                    name=title[:255] if title else "Manual Lead",
+                    email="",
+                    phone="",
+                    sector=skill.get("id", "") or "manual",
+                    location="",
+                    score=80,
+                    source="manual_upwork",
+                    notes=url or description[:500],
+                    skill_used=skill.get("id", ""),
+                )
+                log_action(
+                    "manual_upwork_proposal",
+                    {
+                        "title": title,
+                        "url": url,
+                        "skill": skill.get("id", ""),
+                    },
+                )
+            except Exception as e:
+                log.warning(f"[MANUAL] Não foi possível salvar lead manual: {e}")
+
+        return jsonify(
+            {
+                "title": title,
+                "url": url,
+                "skill_id": skill.get("id", ""),
+                "package": package,
+            }
+        ), 200
+    except Exception as e:
+        log.error(f"/api/manual-proposal error: {e}")
+        return jsonify({"error": "internal_error"}), 500
 
 
 @app.route("/api/login", methods=["POST"])
