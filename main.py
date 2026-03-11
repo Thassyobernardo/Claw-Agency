@@ -662,6 +662,23 @@ def jobs_feed():
 
         # Normaliza + filtra "peixes grandes" no Upwork
         filtered = []
+        # Filtro simples de relevância por título/categoria (focado em dev/dados/automação)
+        keywords = [
+            "data",
+            "python",
+            "engineer",
+            "developer",
+            "scientist",
+            "analytics",
+            "analyst",
+            "automation",
+            "machine learning",
+            "ai ",
+            "ml ",
+            "business intelligence",
+            "bi ",
+        ]
+
         for j in jobs:
             j = dict(j or {})
             _ensure_job_format(j)
@@ -677,6 +694,13 @@ def jobs_feed():
                     j["budget_usd"] = budget_usd
                 else:
                     j["budget_usd"] = None
+
+            # Filtro de relevância por título/categoria (aplicado a todas as plataformas)
+            title_l = (j.get("title") or "").lower()
+            cat_l = (j.get("category") or "").lower()
+            text = f"{title_l} {cat_l}"
+            if not any(k in text for k in keywords):
+                continue
 
             filtered.append(j)
 
