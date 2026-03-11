@@ -604,12 +604,14 @@ def jobs_feed():
             platform = (j.get("platform") or "").lower()
             if platform == "upwork":
                 budget_usd = parse_budget_to_usd(j.get("budget"))
-                # Se não conseguir ler orçamento, descarta (foco peixes grandes)
-                if budget_usd is None:
-                    continue
-                if budget_usd < UPWORK_MIN_BUDGET_USD:
-                    continue
-                j["budget_usd"] = budget_usd
+                # Se conseguir ler orçamento, aplica filtro "peixes grandes".
+                # Se NÃO conseguir ler (ex.: hourly / N/A), mantém a vaga e deixa budget_usd = None.
+                if budget_usd is not None:
+                    if budget_usd < UPWORK_MIN_BUDGET_USD:
+                        continue
+                    j["budget_usd"] = budget_usd
+                else:
+                    j["budget_usd"] = None
 
             filtered.append(j)
 
