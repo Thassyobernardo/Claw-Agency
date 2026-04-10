@@ -1,0 +1,70 @@
+[dotenv@17.3.1] injecting env (3) from .env -- tip: ΓÜÖ∩╕Å  write to custom object with { processEnv: myObject }
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ≡ƒ¢á∩╕Å  run anywhere with `dotenvx run -- yourcommand`
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ΓÜÖ∩╕Å  write to custom object with { processEnv: myObject }
+≡ƒº¬ LAB TEST: Initiating Manual Morning Update Pipeline...
+≡ƒîà Morning Update: Starting Cinematic Pipeline [Claude 3.5 + Together AI]...
+≡ƒöì News: Searching for "latest global AI and tech news impact 2026"...
+ΓÜá∩╕Å OpenRouter: AI Error (likely model routing issue): {
+  error: {
+    message: 'Provider returned error',
+    code: 400,
+    metadata: {
+      raw: '{"message":"The provided model identifier is invalid."}',
+      provider_name: 'Amazon Bedrock',
+      is_byok: false
+    }
+  },
+  user_id: 'user_3BMTyQFJ6fbXMvabqGslrBdqspB'
+}
+≡ƒÄ¿ Image: Generating background with Together AI (FLUX.1-schnell)...
+ΓÜá∩╕Å OpenRouter: Falling back to Local Mock to continue pipeline...
+Γ¥î Image: Together AI Error: {
+  id: 'odW5gNQ-2kFHot-9e5e64570b6eb747-SEA',
+  error: {
+    message: 'height must be a multiple of 16',
+    type: 'invalid_request_error',
+    param: 'height',
+    code: null
+  }
+}
+≡ƒô╕ Render: Rendering cinematic slide to morning_1.jpg...
+Γ£à Render: Finished morning_1.jpg
+≡ƒô╕ Render: Rendering cinematic slide to morning_2.jpg...
+Γ£à Render: Finished morning_2.jpg
+≡ƒô╕ Render: Rendering cinematic slide to morning_3.jpg...
+Γ£à Render: Finished morning_3.jpg
+≡ƒô╕ Render: Rendering cinematic slide to morning_4.jpg...
+Γ£à Render: Finished morning_4.jpg
+≡ƒô╕ Render: Rendering cinematic slide to morning_5.jpg...
+Γ£à Render: Finished morning_5.jpg
+Γ£à Morning Update: 5 Cinematic Slides Rendered Successfully
+≡ƒÄë LAB TEST: Pipeline completed successfully.
+SCRIPT GENERATED: {
+  "slide_1": {
+    "title": "Bigger than your morning coffee",
+    "subtitle": "A new AI shift is hitting Melbourne sparks."
+  },
+  "slide_2": {
+    "title": "The Old Way",
+    "text": "Losing 10h a week on admin while on the tools."
+  },
+  "slide_3": {
+    "title": "The AI Shift",
+    "text": "24/7 DMs handled while you sleep."
+  },
+  "slide_4": {
+    "title": "The Multiplier",
+    "text": "3x more bookings without a single extra call."
+  },
+  "slide_5": {
+    "title": "Get Sorted",
+    "subtitle": "DM 'AGENCY' for a free audit. No drama."
+  },
+  "caption": "Aussie lifestyle copy for Instagram. Time to get sorted, mate! Drop us a DM. #AUTradies #MelbourneSparkies #ClawAgency",
+  "hashtags": [
+    "#AUTradies",
+    "#MelbourneSparkies",
+    "#ClawAgency"
+  ],
+  "visual_prompt": "A high-quality, sun-drenched sun-flared shot of a modern clean electrician van or cafe in Melbourne, premium lighting, 8k, realistic."
+}
