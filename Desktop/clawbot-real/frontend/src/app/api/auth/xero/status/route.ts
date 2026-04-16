@@ -10,9 +10,10 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { isTokenValid, type XeroTokenSet } from "@/lib/xero";
+import { isTokenValid } from "@/lib/xero";
 import { sql } from "@/lib/db";
 import { isUuid } from "@/lib/validators";
+import { parseTokenData } from "@/lib/crypto";
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const tenantId = request.cookies.get("xero_tenant_id")?.value;
@@ -21,7 +22,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ connected: false });
   }
 
-  const rows = await sql<{ name: string; xero_tenant_id: string; xero_token_data: XeroTokenSet }[]>`
+  const rows = await sql<{ name: string; xero_tenant_id: string; xero_token_data: unknown }[]>`
     SELECT name, xero_tenant_id, xero_token_data
     FROM   companies
     WHERE  xero_tenant_id = ${tenantId}
@@ -33,9 +34,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const company = rows[0];
-  const tokenValid = company.xero_token_data
-    ? isTokenValid(company.xero_token_data)
-    : false;
+  const tokens = parseTokenData(company.xero_token_data);
+  const tokenValid = tokens ? isTokenValid(tokens) : false;
 
   return NextResponse.json({
     connected:  true,

@@ -11,9 +11,10 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { refreshAccessToken, type XeroTokenSet } from "@/lib/xero";
+import { refreshAccessToken } from "@/lib/xero";
 import { sql } from "@/lib/db";
 import { isUuid } from "@/lib/validators";
+import { parseTokenData, serializeTokenData } from "@/lib/crypto";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const tenantId = request.cookies.get("xero_tenant_id")?.value;
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   // Fetch current tokens from DB
-  const rows = await sql<{ xero_token_data: XeroTokenSet }[]>`
+  const rows = await sql<{ xero_token_data: unknown }[]>`
     SELECT xero_token_data
     FROM   companies
     WHERE  xero_tenant_id = ${tenantId}
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const tokens = rows[0].xero_token_data;
+  const tokens = parseTokenData(rows[0].xero_token_data);
 
   if (!tokens?.refresh_token) {
     return NextResponse.json(
@@ -65,7 +66,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   // Persist updated tokens
   await sql`
     UPDATE companies
-    SET    xero_token_data = ${JSON.stringify(refreshed)}::jsonb,
+    SET    xero_token_data = ${serializeTokenData(refreshed)}::jsonb,
            updated_at      = NOW()
     WHERE  xero_tenant_id  = ${tenantId}
   `;

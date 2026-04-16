@@ -23,9 +23,9 @@ import {
   fetchBankTransactions,
   fetchAccounts,
   parseXeroDate,
-  type XeroTokenSet,
 } from "@/lib/xero";
 import { sql } from "@/lib/db";
+import { parseTokenData, serializeTokenData } from "@/lib/crypto";
 
 // Australian FY: 1 July → 30 June
 function currentFY() {
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   const companyId = session.user.companyId;
 
   // ── Load tokens from DB ───────────────────────────────────────────────────
-  const rows = await sql<{ xero_tenant_id: string; xero_token_data: XeroTokenSet }[]>`
+  const rows = await sql<{ xero_tenant_id: string; xero_token_data: unknown }[]>`
     SELECT xero_tenant_id, xero_token_data
     FROM   companies
     WHERE  id = ${companyId}
@@ -51,7 +51,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   `;
 
   const company = rows[0];
-  if (!company?.xero_token_data?.access_token) {
+  const tokens = parseTokenData(company?.xero_token_data);
+  if (!tokens?.access_token) {
     return NextResponse.json(
       { error: "xero_not_connected", message: "Connect Xero first." },
       { status: 400 }
@@ -59,14 +60,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   }
 
   // ── Ensure token is valid (auto-refresh if needed) ────────────────────────
-  const { accessToken, updatedTokens } = await getValidAccessToken(company.xero_token_data);
+  const { accessToken, updatedTokens } = await getValidAccessToken(tokens);
   const tenantId = company.xero_tenant_id;
 
-  // Persist refreshed tokens if they changed
+  // Persist refreshed tokens if they changed (always re-encrypt)
   if (updatedTokens) {
     await sql`
       UPDATE companies
-      SET xero_token_data = ${JSON.stringify(updatedTokens)}::jsonb, updated_at = NOW()
+      SET xero_token_data = ${serializeTokenData(updatedTokens)}::jsonb, updated_at = NOW()
       WHERE id = ${companyId}
     `;
   }

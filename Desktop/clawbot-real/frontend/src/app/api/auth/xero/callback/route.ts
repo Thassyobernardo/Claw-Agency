@@ -22,6 +22,7 @@ import {
   type XeroTokenSet,
 } from "@/lib/xero";
 import { sql } from "@/lib/db";
+import { serializeTokenData } from "@/lib/crypto";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         UPDATE companies
         SET
           xero_tenant_id  = ${tenant.tenantId},
-          xero_token_data = ${JSON.stringify(tokens)}::jsonb,
+          xero_token_data = ${serializeTokenData(tokens)}::jsonb,
           updated_at      = NOW()
         WHERE id = ${session.user.companyId}
       `;
@@ -102,7 +103,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         )
         ON CONFLICT (xero_tenant_id)
         DO UPDATE SET
-          xero_token_data = EXCLUDED.xero_token_data,
+          xero_token_data = ${serializeTokenData(tokens)}::jsonb,
           updated_at      = NOW()
       `;
     }
