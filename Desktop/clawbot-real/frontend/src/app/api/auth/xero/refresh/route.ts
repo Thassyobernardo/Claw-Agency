@@ -11,7 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { refreshAccessToken } from "@/lib/xero";
+import { refreshAccessToken, type XeroTokenSet } from "@/lib/xero";
 import { sql } from "@/lib/db";
 import { isUuid } from "@/lib/validators";
 import { parseTokenData, serializeTokenData } from "@/lib/crypto";

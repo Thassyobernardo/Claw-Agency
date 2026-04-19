@@ -1,19 +1,22 @@
 /**
- * In-memory rate limiter for Next.js API routes.
+ * Rate limiter for Next.js API routes.
  *
- * In production, swap this for Redis (e.g. upstash/ratelimit) so the
- * counter works across multiple serverless instances.
+ * Uses an in-memory Map. This is sufficient for a single-instance deployment
+ * (Vercel serverless functions scale per-function, but most traffic in the
+ * initial EcoLink launch will hit the same warm instance). If/when we scale
+ * to multiple concurrent containers, we can readd a Redis-backed store —
+ * previous Redis implementation was removed because the `redis` package was
+ * never installed via npm install and blocked Turbopack builds.
  *
- * Current limits:
- *  - Login: 5 attempts per 15 minutes per IP
- *  - API:   60 requests per minute per IP
+ * Current limits (unchanged):
+ *  - Login:    5 attempts per 15 minutes per IP
+ *  - Register: 3 attempts per hour per IP
+ *  - API:      60 requests per minute per IP
  */
 
-interface Bucket {
-  count: number;
-  resetAt: number;
-}
+// ── In-memory store ─────────────────────────────────────────────────────────
 
+interface Bucket { count: number; resetAt: number }
 const store = new Map<string, Bucket>();
 
 /** Purge expired buckets every 5 minutes to prevent memory leaks */
@@ -24,13 +27,7 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-export interface RateLimitResult {
-  allowed: boolean;
-  remaining: number;
-  resetAt: number;
-}
-
-export function checkRateLimit(
+function memoryCheck(
   identifier: string,
   limit: number,
   windowMs: number,
@@ -44,9 +41,42 @@ export function checkRateLimit(
   }
 
   existing.count += 1;
-  const allowed    = existing.count <= limit;
-  const remaining  = Math.max(0, limit - existing.count);
+  const allowed   = existing.count <= limit;
+  const remaining = Math.max(0, limit - existing.count);
   return { allowed, remaining, resetAt: existing.resetAt };
+}
+
+// ── Public API ──────────────────────────────────────────────────────────────
+
+export interface RateLimitResult {
+  allowed: boolean;
+  remaining: number;
+  resetAt: number;
+}
+
+/**
+ * Increment the counter for `identifier` and return whether the request is
+ * allowed. In-memory only.
+ */
+export async function checkRateLimit(
+  identifier: string,
+  limit: number,
+  windowMs: number,
+): Promise<RateLimitResult> {
+  return memoryCheck(identifier, limit, windowMs);
+}
+
+/**
+ * Synchronous variant for call sites that cannot be made async easily
+ * (e.g. NextAuth `authorize` callback). Uses the in-memory store only.
+ * Prefer `checkRateLimit` everywhere else.
+ */
+export function checkRateLimitSync(
+  identifier: string,
+  limit: number,
+  windowMs: number,
+): RateLimitResult {
+  return memoryCheck(identifier, limit, windowMs);
 }
 
 /** Extract a best-effort client IP from a Next.js Request */

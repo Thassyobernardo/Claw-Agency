@@ -26,7 +26,7 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import { sql } from "@/lib/db";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { normaliseEmail } from "@/lib/validators";
+import { normaliseEmail, isValidAbn } from "@/lib/validators";
 
 const ANZSIC_LABELS: Record<string, string> = {
   A: "Agriculture, Forestry & Fishing",
@@ -98,7 +98,7 @@ async function sendVerificationEmail(
   const firstName = name.split(" ")[0];
 
   await resend.emails.send({
-    from:    "EcoLink <noreply@ecolink.com.au>",
+    from:    process.env.EMAIL_FROM ?? "EcoLink <noreply@mytradieai.com.au>",
     to:      email,
     subject: "Confirm your EcoLink account",
     html: `
@@ -133,7 +133,7 @@ async function sendWelcomeEmail(
   const firstName = name.split(" ")[0];
 
   await resend.emails.send({
-    from:    "EcoLink <noreply@ecolink.com.au>",
+    from:    process.env.EMAIL_FROM ?? "EcoLink <noreply@mytradieai.com.au>",
     to:      email,
     subject: `Welcome to EcoLink, ${firstName}!`,
     html: `
@@ -175,7 +175,7 @@ async function sendWelcomeEmail(
 export async function POST(request: NextRequest): Promise<NextResponse> {
   // ── Rate limit ────────────────────────────────────────────────────────
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const rl = checkRateLimit(`register:${ip}`, 3, 60 * 60 * 1000);
+  const rl = await checkRateLimit(`register:${ip}`, 3, 60 * 60 * 1000);
   if (!rl.allowed) {
     return NextResponse.json({ error: "rate_limited" }, { status: 429 });
   }
@@ -218,9 +218,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (pwError)
     return NextResponse.json({ error: pwError, field: "password" }, { status: 400 });
 
-  const cleanAbn = abn.replace(/\s+/g, "");
+  const cleanAbn = abn.replace(/[\s-]/g, "");
   if (!/^\d{11}$/.test(cleanAbn))
-    return NextResponse.json({ error: "invalid_abn", field: "abn" }, { status: 400 });
+    return NextResponse.json({ error: "invalid_abn_format", field: "abn" }, { status: 400 });
+  if (!isValidAbn(cleanAbn))
+    return NextResponse.json({ error: "invalid_abn_checksum", field: "abn" }, { status: 400 });
 
   const cleanIndustry = industry.toUpperCase();
   if (!ANZSIC_LABELS[cleanIndustry])

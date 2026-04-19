@@ -17,7 +17,7 @@ const OK = NextResponse.json({ ok: true });
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const rl = checkRateLimit(`forgot:${ip}`, 5, 15 * 60 * 1000);
+  const rl = await checkRateLimit(`forgot:${ip}`, 5, 15 * 60 * 1000);
   if (!rl.allowed) return OK; // don't reveal rate limiting
 
   let body: { email?: string };
@@ -54,7 +54,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   if (resendKey) {
     const resend = new Resend(resendKey);
     await resend.emails.send({
-      from:    "EcoLink <noreply@ecolink.com.au>",
+      from:    process.env.EMAIL_FROM ?? "EcoLink <noreply@mytradieai.com.au>",
       to:      normEmail,
       subject: "Reset your EcoLink password",
       html: `

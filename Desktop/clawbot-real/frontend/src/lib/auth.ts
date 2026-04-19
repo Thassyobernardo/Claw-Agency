@@ -59,7 +59,7 @@ export const authOptions: NextAuthOptions = {
         const ip = (req as any)?.headers?.["x-forwarded-for"]?.split(",")[0]?.trim()
           ?? (req as any)?.headers?.["x-real-ip"]
           ?? "unknown";
-        const rl = checkRateLimit(`login:${ip}`, 5, 15 * 60 * 1000);
+        const rl = await checkRateLimit(`login:${ip}`, 5, 15 * 60 * 1000);
         if (!rl.allowed) {
           throw new Error("TooManyRequests");
         }
