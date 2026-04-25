@@ -7,9 +7,7 @@ import {
   CheckCircle2, XCircle, Loader2, Sparkles, Target, CreditCard,
   Upload, PenLine,
 } from "lucide-react";
-import useSWR from "swr";
-
-const fetcher = (url: string) => fetch(url).then((res) => res.json());
+} from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState, Suspense, useCallback } from "react";
@@ -625,35 +623,7 @@ function DashboardInner() {
             </div>
 
             {/* Option 2 - Import CSV/Excel */}
-            {(() => {
-              const { data, error, mutate, isValidating } = useSWR("/api/transactions/list", fetcher);
 
-              if (error) return <div className="p-8 text-red-500">Failed to load transactions.</div>;
-              if (!data) return <div className="flex items-center justify-center p-8"><Loader2 className="animate-spin" size={32} /></div>;
-
-              const transactions = data.transactions;
-
-              return (
-                <div className="md:col-span-2">
-                  <h2 className="text-2xl font-bold text-slate-800 mb-4">Recent Transactions</h2>
-                  <button
-                    onClick={() => mutate()}
-                    className="mb-4 px-4 py-2 bg-aw-green text-white rounded-lg hover:bg-aw-green-dark transition"
-                  >Refresh</button>
-                  <ul className="space-y-2">
-                    {transactions.map((tx: any) => (
-                      <li key={tx.id} className="p-3 bg-white rounded shadow-sm flex justify-between items-center">
-                        <div>
-                          <span className="font-medium text-slate-900">{tx.description}</span>
-                          <span className="ml-2 text-xs text-slate-500">{new Date(tx.transaction_date).toLocaleDateString()}</span>
-                        </div>
-                        <span className={`font-bold ${tx.amount_aud > 0 ? "text-green-600" : "text-red-600"}`}>${tx.amount_aud.toFixed(2)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              );
-            })()}
 
             <Link href="/import"
               className="rounded-2xl border-2 border-dashed border-aw-gray-border bg-white p-6 flex flex-col gap-4 hover:border-blue-400/50 hover:bg-blue-50/30 transition-all">
