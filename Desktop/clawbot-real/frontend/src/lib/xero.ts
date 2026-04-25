@@ -63,9 +63,9 @@ const SCOPES = [
  *
  * Priority:
  *   1. Explicit override        — XERO_REDIRECT_URI env var
- *   2. App URL                  — NEXT_PUBLIC_APP_URL + /api/auth/xero/callback
+ *   2. App URL                  — NEXT_PUBLIC_APP_URL + /api/integrations/xero/callback
  *   3. Caller-supplied origin   — derived from the incoming request
- *   4. Localhost fallback       — http://localhost:3000/api/auth/xero/callback
+ *   4. Localhost fallback       — http://localhost:3000/api/integrations/xero/callback
  *
  * Whichever URI is returned MUST be registered in your Xero app at
  * https://developer.xero.com/app/manage  (Configuration → Redirect URIs).
@@ -76,10 +76,10 @@ function resolveRedirectUri(originOverride?: string): string {
 
   const appUrl = originOverride ?? process.env.NEXT_PUBLIC_APP_URL;
   if (appUrl) {
-    return `${appUrl.replace(/\/+$/, "")}/api/auth/xero/callback`;
+    return `${appUrl.replace(/\/+$/, "")}/api/integrations/xero/callback`;
   }
 
-  return "http://localhost:3000/api/auth/xero/callback";
+  return "http://localhost:3000/api/integrations/xero/callback";
 }
 
 function getCredentials(originOverride?: string) {

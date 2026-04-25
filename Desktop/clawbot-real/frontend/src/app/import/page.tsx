@@ -59,7 +59,7 @@ export default function ImportPage() {
               </p>
               
               <a 
-                href="/api/auth/xero"
+                href="/api/integrations/xero"
                 className="inline-flex items-center gap-3 bg-aw-green px-10 py-4 rounded-xl text-white font-bold shadow-lg shadow-aw-green/20 hover:bg-aw-green-dark transition"
               >
                 Connect to Xero <ArrowRight size={18} />

@@ -33,8 +33,8 @@ Os 3 secrets gerados aleatoriamente sao:
 ## 3. Aplicar migracao 004 (Row Level Security) no Postgres do Railway
 
 ```powershell
-$env:DATABASE_URL           = "postgres://..."   # Railway → Postgres → Connect
-$env:ECOLINK_APP_DB_PASSWORD = "<mesmo valor do passo 2>"
+$env:DATABASE_URL           = "postgres://..."   # Railway -> Postgres -> Connect
+# Defina $env:ECOLINK_APP_DB_PASSWORD com a senha do passo 2
 .\03_rodar_migracao_004.ps1
 ```
 

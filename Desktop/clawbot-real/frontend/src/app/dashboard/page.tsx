@@ -132,7 +132,7 @@ function DashboardInner() {
         fetch("/api/dashboard/summary").then(r => r.json()),
         fetch("/api/dashboard/transactions?limit=8").then(r => r.json()),
         fetch("/api/dashboard/categories?limit=5").then(r => r.json()),
-        fetch("/api/auth/xero/status").then(r => r.json()),
+        fetch("/api/integrations/xero/status").then(r => r.json()),
         fetch("/api/dashboard/benchmark").then(r => r.json()),
       ]);
       setSummary(s);
@@ -298,7 +298,7 @@ function DashboardInner() {
                 </button>
               </div>
             ) : (
-              <Link href="/api/auth/xero" className="flex items-center gap-2 rounded-xl border border-aw-gray-border bg-white px-5 py-2.5 text-sm font-bold text-aw-slate transition-all hover:border-aw-green/40 hover:text-aw-green active:scale-95">
+              <Link href="/api/integrations/xero" className="flex items-center gap-2 rounded-xl border border-aw-gray-border bg-white px-5 py-2.5 text-sm font-bold text-aw-slate transition-all hover:border-aw-green/40 hover:text-aw-green active:scale-95">
                 <Link2 size={16} /> Connect Xero
               </Link>
             )}
@@ -614,7 +614,7 @@ function DashboardInner() {
                   <CheckCircle2 size={16} /> {xeroStatus.tenantName ?? "Xero Connected"}
                 </div>
               ) : (
-                <Link href="/api/auth/xero"
+                <Link href="/api/integrations/xero"
                   className="mt-auto w-full flex items-center justify-center gap-2 rounded-xl bg-aw-green px-4 py-3 text-white font-bold text-sm transition-all hover:bg-aw-green-dark active:scale-95">
                   <Link2 size={16} /> Connect Xero
                 </Link>
@@ -623,54 +623,4 @@ function DashboardInner() {
 
             {/* Option 2 — Import CSV/Excel */}
             <Link href="/import"
-              className="rounded-2xl border-2 border-dashed border-aw-gray-border bg-white p-6 flex flex-col gap-4 hover:border-blue-400/50 hover:bg-blue-50/30 transition-all group">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition">
-                  <Upload size={20} className="text-blue-600" />
-                </div>
-                <div>
-                  <p className="font-bold text-aw-slate text-sm">Import CSV / Excel</p>
-                  <p className="text-xs text-aw-slate-mid">Upload bank statement or spreadsheet</p>
-                </div>
-              </div>
-              <div className="mt-auto w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-white font-bold text-sm group-hover:bg-blue-700 transition">
-                <Upload size={16} /> Upload File
-              </div>
-            </Link>
-
-            {/* Option 3 — Manual Entry */}
-            <Link href="/import?tab=manual"
-              className="rounded-2xl border-2 border-dashed border-aw-gray-border bg-white p-6 flex flex-col gap-4 hover:border-purple-400/50 hover:bg-purple-50/30 transition-all group">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center group-hover:bg-purple-100 transition">
-                  <PenLine size={20} className="text-purple-600" />
-                </div>
-                <div>
-                  <p className="font-bold text-aw-slate text-sm">Manual Entry</p>
-                  <p className="text-xs text-aw-slate-mid">Type transactions directly into the system</p>
-                </div>
-              </div>
-              <div className="mt-auto w-full flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-3 text-white font-bold text-sm group-hover:bg-purple-700 transition">
-                <PenLine size={16} /> Add Manually
-              </div>
-            </Link>
-
-          </div>
-        </motion.div>
-
-      </main>
-    </div>
-  );
-}
-
-export default function DashboardPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-aw-gray/40 flex items-center justify-center">
-        <Loader2 className="animate-spin text-aw-green" size={32} />
-      </div>
-    }>
-      <DashboardInner />
-    </Suspense>
-  );
-}
+              className="rounded-2xl border-2 border-dashed border-aw-gray-border bg-white p-6 flex flex-col gap-4 hover:border-blue-400/50 hover:bg-blue-50/30 t
