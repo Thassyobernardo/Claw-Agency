@@ -7,7 +7,6 @@ import {
   CheckCircle2, XCircle, Loader2, Sparkles, Target, CreditCard,
   Upload, PenLine,
 } from "lucide-react";
-} from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState, Suspense, useCallback } from "react";
