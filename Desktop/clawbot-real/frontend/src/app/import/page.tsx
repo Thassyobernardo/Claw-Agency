@@ -1,13 +1,22 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { Link2, Upload, Type, ArrowRight, ShieldCheck } from "lucide-react";
 import ManualTransactionEntry from "@/components/ManualTransactionEntry";
 import FileUploadImporter from "@/components/FileUploadImporter";
 
-export default function ImportPage() {
-  const [method, setMethod] = useState("auto"); // auto | file | manual
+function ImportPageInner() {
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab"); // 'auto' | 'file' | 'manual'
+  const [method, setMethod] = useState(tabParam === "manual" ? "manual" : tabParam === "file" ? "file" : "auto");
+
+  useEffect(() => {
+    if (tabParam === "manual") setMethod("manual");
+    else if (tabParam === "file") setMethod("file");
+  }, [tabParam]);
 
   return (
     <div className="min-h-screen bg-slate-50/50 p-6 md:p-12">
@@ -77,5 +86,13 @@ export default function ImportPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ImportPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50/50 flex items-center justify-center"><div className="animate-spin h-8 w-8 border-4 border-green-600 border-t-transparent rounded-full" /></div>}>
+      <ImportPageInner />
+    </Suspense>
   );
 }

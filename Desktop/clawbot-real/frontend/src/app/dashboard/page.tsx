@@ -639,7 +639,7 @@ function DashboardInner() {
             </Link>
 
             {/* Option 3 - Manual Entry */}
-            <Link href="/transactions/new"
+            <Link href="/import?tab=manual"
               className="rounded-2xl border-2 border-dashed border-aw-gray-border bg-white p-6 flex flex-col gap-4 hover:border-purple-400/50 hover:bg-purple-50/30 transition-all">
               <div className="flex items-center gap-3">
                 <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center">
