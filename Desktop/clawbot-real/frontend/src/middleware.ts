@@ -16,6 +16,8 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
+// NOTE: /api/billing/webhook MUST stay public — Stripe calls it without a session cookie.
+// If you add more billing sub-routes, list them explicitly here rather than using /api/billing/:path*.
 export const config = {
   matcher: [
     "/dashboard/:path*",
@@ -25,6 +27,7 @@ export const config = {
     "/api/xero/:path*",
     "/api/myob/:path*",
     "/api/transactions/:path*",
-    "/api/billing/:path*",
+    "/api/billing/checkout",
+    "/api/billing/portal",
   ],
 };

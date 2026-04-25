@@ -255,14 +255,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       `;
 
       const [user] = await tx<Array<{ id: string }>>`
-        INSERT INTO users (company_id, email, name, password_hash, role, verify_token)
+        INSERT INTO users (company_id, email, name, password_hash, role, verify_token, verify_expires_at)
         VALUES (
           ${company.id}::uuid,
           ${normEmail},
           ${name.trim()},
           ${passwordHash},
           'owner',
-          ${verifyToken}
+          ${verifyToken},
+          NOW() + INTERVAL '24 hours'
         )
         RETURNING id::text
       `;
@@ -271,7 +272,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     });
 
     // ── Send emails (non-blocking) ────────────────────────────────────
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://claw-agency-hunter-production.up.railway.app";
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://claw-agency.vercel.app";
     const cleanName = name.trim();
     Promise.all([
       sendVerificationEmail(normEmail, cleanName, verifyToken, appUrl),
@@ -286,6 +287,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: "email_taken", field: "email" }, { status: 409 });
     }
     console.error("[register] DB error:", msg);
-    return NextResponse.json({ error: "server_error" }, { status: 500 });
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

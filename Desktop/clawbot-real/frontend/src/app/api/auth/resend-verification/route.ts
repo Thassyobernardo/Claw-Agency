@@ -44,15 +44,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   await sql`
     UPDATE users
-    SET    verify_token = ${token},
-           updated_at   = NOW()
+    SET    verify_token      = ${token},
+           verify_expires_at = NOW() + INTERVAL '24 hours',
+           updated_at        = NOW()
     WHERE  id = ${rows[0].id}::uuid
   `.catch(() => null);
 
   const resendKey = process.env.RESEND_API_KEY;
   if (!resendKey) return OK;
 
-  const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? "https://claw-agency-hunter-production.up.railway.app";
+  const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? "https://claw-agency.vercel.app";
   const link      = `${appUrl}/api/auth/verify-email?token=${token}`;
   const firstName = rows[0].name.split(" ")[0];
 

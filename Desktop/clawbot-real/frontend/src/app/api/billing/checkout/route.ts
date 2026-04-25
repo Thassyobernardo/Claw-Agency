@@ -40,47 +40,57 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "price_not_configured" }, { status: 400 });
   }
 
-  // Fetch or create Stripe customer
-  const companies = await sql<Array<{ stripe_customer_id: string | null; name: string }>>`
-    SELECT stripe_customer_id, name
-    FROM companies WHERE id = ${session.user.companyId}::uuid LIMIT 1
-  `;
-  if (companies.length === 0) {
-    return NextResponse.json({ error: "company_not_found" }, { status: 404 });
-  }
-
-  let customerId = companies[0].stripe_customer_id;
-
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: session.user.email,
-      name: companies[0].name,
-      metadata: { company_id: session.user.companyId },
-    });
-    customerId = customer.id;
-    await sql`
-      UPDATE companies SET stripe_customer_id = ${customerId}
-      WHERE id = ${session.user.companyId}::uuid
+  try {
+    // Fetch or create Stripe customer
+    const companies = await sql<Array<{ stripe_customer_id: string | null; name: string }>>`
+      SELECT stripe_customer_id, name
+      FROM companies WHERE id = ${session.user.companyId}::uuid LIMIT 1
     `;
-  }
+    if (companies.length === 0) {
+      return NextResponse.json({ error: "company_not_found" }, { status: 404 });
+    }
 
-  // Create checkout session
-  const checkoutSession = await stripe.checkout.sessions.create({
-    customer: customerId,
-    payment_method_types: ["card"],
-    line_items: [{ price: plan.price_id, quantity: 1 }],
-    mode: "subscription",
-    success_url: `${APP_URL}/billing?success=1&plan=${planKey}`,
-    cancel_url: `${APP_URL}/billing?cancelled=1`,
-    subscription_data: {
-      trial_period_days: 14,
+    let customerId = companies[0].stripe_customer_id;
+
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: session.user.email,
+        name: companies[0].name,
+        metadata: { company_id: session.user.companyId },
+      });
+      customerId = customer.id;
+      await sql`
+        UPDATE companies SET stripe_customer_id = ${customerId}
+        WHERE id = ${session.user.companyId}::uuid
+      `;
+    }
+
+    const checkoutSession = await stripe.checkout.sessions.create({
+      customer: customerId,
+      payment_method_types: ["card"],
+      line_items: [{ price: plan.price_id, quantity: 1 }],
+      mode: "subscription",
+      success_url: `${APP_URL}/billing?success=1&plan=${planKey}`,
+      cancel_url: `${APP_URL}/billing?cancelled=1`,
+      subscription_data: {
+        trial_period_days: 14,
+        metadata: { company_id: session.user.companyId, plan: planKey },
+      },
       metadata: { company_id: session.user.companyId, plan: planKey },
-    },
-    metadata: { company_id: session.user.companyId, plan: planKey },
-    allow_promotion_codes: true,
-    billing_address_collection: "auto",
-    customer_update: { address: "auto" },
-  });
+      allow_promotion_codes: true,
+      billing_address_collection: "required",
+      tax_id_collection: { enabled: true },
+      automatic_tax: { enabled: true },
+      customer_update: {
+        address: "auto",
+        name:    "auto",
+      },
+    });
 
-  return NextResponse.json({ url: checkoutSession.url });
+    return NextResponse.json({ url: checkoutSession.url });
+  } catch (err: any) {
+    console.error("[Stripe Checkout Error]:", err);
+    return NextResponse.json({ error: err.message || "Erro desconhecido no Stripe" }, { status: 500 });
+  }
 }
+

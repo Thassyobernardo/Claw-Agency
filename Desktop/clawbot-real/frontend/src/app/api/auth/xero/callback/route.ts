@@ -93,17 +93,19 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       `;
     } else {
       // Anonymous flow (future: public sign-up via Xero)
-      // Upsert by xero_tenant_id — creates a shell company if this is a new org
+      // Upsert by xero_tenant_id — creates a shell company if this is a new org.
+      // IMPORTANT: tokens are AES-256-GCM encrypted on BOTH the INSERT and UPDATE paths.
+      const encryptedTokenJson = serializeTokenData(tokens);
       await sql`
         INSERT INTO companies (name, xero_tenant_id, xero_token_data)
         VALUES (
           ${tenant.tenantName},
           ${tenant.tenantId},
-          ${JSON.stringify(tokens)}::jsonb
+          ${encryptedTokenJson}::jsonb
         )
         ON CONFLICT (xero_tenant_id)
         DO UPDATE SET
-          xero_token_data = ${serializeTokenData(tokens)}::jsonb,
+          xero_token_data = ${encryptedTokenJson}::jsonb,
           updated_at      = NOW()
       `;
     }

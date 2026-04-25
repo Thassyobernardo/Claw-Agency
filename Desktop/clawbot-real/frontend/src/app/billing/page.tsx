@@ -242,7 +242,7 @@ function BillingContent() {
           </h1>
           <p className="text-slate-400 text-lg">
             All plans include a <span className="text-emerald-400 font-medium">14-day free trial</span>.
-            No credit card required to start.
+            Cancel anytime before the trial ends and you won&apos;t be charged.
           </p>
 
           {/* Current plan badge */}
@@ -407,10 +407,11 @@ function BillingContent() {
         {/* ── Trial info ── */}
         <div className="mt-10 text-center text-sm text-slate-500 space-y-1">
           <p>
-            All plans start with a <strong className="text-slate-400">14-day free trial</strong> — no credit card required.
+            All plans start with a <strong className="text-slate-400">14-day free trial</strong>. Your card is authorised but not charged until the trial ends.
           </p>
           <p>
-            Prices are in Australian dollars (AUD) and exclude GST.
+            Prices are shown in Australian dollars (AUD). 10% GST is added at checkout
+            for Australian customers and itemised on your Stripe tax invoice.
             By subscribing you agree to our{" "}
             <a href="#" className="text-emerald-500 hover:text-emerald-400 underline underline-offset-2">
               Terms of Service

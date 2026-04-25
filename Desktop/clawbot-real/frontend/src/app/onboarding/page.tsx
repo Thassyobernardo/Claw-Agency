@@ -16,12 +16,13 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Leaf, CheckCircle2, ArrowRight, ArrowLeft, Eye, EyeOff,
-  Link2, Loader2, Building2, User, Zap, Lock,
+  Leaf, ArrowRight, ArrowLeft, Eye, EyeOff,
+  Loader2, Building2, User,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useCallback } from "react";
+import { isValidAbn } from "@/lib/validators";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -48,7 +49,9 @@ const INDUSTRIES = [
   { value: "S", label: "Other Services" },
 ];
 
-const STEP_LABELS = ["Account", "Business", "Connect Xero", "All Done"];
+// Pós-registro o usuário é redirecionado p/ /login para verificar email,
+// e o WelcomeGuide modal cobre a parte de "Connect Xero" no dashboard.
+const STEP_LABELS = ["Account", "Business"];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -162,11 +165,13 @@ export default function OnboardingPage() {
     const errs: typeof errors = {};
     if (!form.company_name.trim())
       errs.company_name = "Enter your company name";
-    const cleanAbn = form.abn.replace(/\s+/g, "");
+    const cleanAbn = form.abn.replace(/[\s-]/g, "");
     if (!cleanAbn)
       errs.abn = "ABN is required";
     else if (!/^\d{11}$/.test(cleanAbn))
       errs.abn = "ABN must be 11 digits (e.g. 51 824 753 556)";
+    else if (!isValidAbn(cleanAbn))
+      errs.abn = "ABN checksum is invalid — please double-check the number";
     if (!form.state)
       errs.state = "Select your state";
     if (!form.industry)
@@ -204,7 +209,7 @@ export default function OnboardingPage() {
         } else if (data.field) {
           setErrors({ [data.field]: data.error.replace(/_/g, " ") });
         } else {
-          setErrors({ global: "Something went wrong. Please try again." });
+          setErrors({ global: data.error || "Something went wrong. Please try again." });
         }
         return;
       }
@@ -212,6 +217,9 @@ export default function OnboardingPage() {
       // Registration successful — redirect to login with email-check notice
       router.push("/login?check_email=1");
 
+    } catch (e: unknown) {
+      const m = e instanceof Error ? e.message : "Network error";
+      setErrors({ global: `Could not reach server: ${m}` });
     } finally {
       setLoading(false);
     }
@@ -224,10 +232,6 @@ export default function OnboardingPage() {
       if (validateStep2()) await register();
     }
   }, [step, register]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const skipXero = useCallback(() => setStep(3), []);
-
-  const goToDashboard = useCallback(() => router.push("/dashboard"), [router]);
 
   // ─────────────────────────────────────────────────────────────────────
   return (
@@ -248,7 +252,7 @@ export default function OnboardingPage() {
         layout
         className="w-full max-w-md rounded-3xl border border-aw-gray-border bg-white p-8 shadow-xl"
       >
-        <StepDots current={step} total={4} />
+        <StepDots current={step} total={2} />
 
         <AnimatePresence mode="wait">
 
@@ -262,7 +266,7 @@ export default function OnboardingPage() {
                 </div>
                 <h1 className="text-2xl font-black text-aw-slate">Create your account</h1>
                 <p className="text-sm text-aw-slate-mid mt-1 font-medium">
-                  Start your free 14-day trial. No credit card required.
+                  Start your free 14-day trial. Cancel any time before it ends and you won&apos;t be charged.
                 </p>
               </div>
 
@@ -373,92 +377,6 @@ export default function OnboardingPage() {
                   {loading
                     ? <><Loader2 size={16} className="animate-spin" /> Creating account…</>
                     : <>Create Account <ArrowRight size={16} /></>}
-                </button>
-              </div>
-            </motion.div>
-          )}
-
-          {/* ── Step 2: Connect Xero ─────────────────────────────────── */}
-          {step === 2 && (
-            <motion.div key="step2"
-              initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}>
-              <div className="mb-6">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-aw-green-light mb-3">
-                  <Link2 size={22} className="text-aw-green" />
-                </div>
-                <h1 className="text-2xl font-black text-aw-slate">Connect your accounting</h1>
-                <p className="text-sm text-aw-slate-mid mt-1 font-medium">
-                  Link Xero and we&apos;ll import your transactions automatically. Takes 30 seconds.
-                </p>
-              </div>
-
-              {/* Xero benefits */}
-              <div className="space-y-3 mb-6">
-                {[
-                  { icon: <Zap size={14} className="text-aw-green" />, text: "Auto-import every SPEND transaction" },
-                  { icon: <CheckCircle2 size={14} className="text-aw-green" />, text: "AI classifies them instantly" },
-                  { icon: <Lock size={14} className="text-aw-green" />, text: "Read-only access — we never modify your data" },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 rounded-xl bg-aw-green-light/60 px-4 py-3">
-                    {item.icon}
-                    <span className="text-sm font-semibold text-aw-slate">{item.text}</span>
-                  </div>
-                ))}
-              </div>
-
-              <a href="/api/auth/xero"
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-aw-green py-3.5 text-sm font-bold text-white transition hover:bg-aw-green-dark active:scale-95 shadow-lg shadow-aw-green/20">
-                <Link2 size={16} /> Connect Xero
-              </a>
-
-              <button onClick={skipXero}
-                className="mt-3 w-full rounded-xl border border-aw-gray-border py-3 text-sm font-semibold text-aw-slate-mid transition hover:text-aw-slate hover:border-aw-slate/40 active:scale-95">
-                Skip for now — I&apos;ll connect later
-              </button>
-            </motion.div>
-          )}
-
-          {/* ── Step 3: Done ─────────────────────────────────────────── */}
-          {step === 3 && (
-            <motion.div key="step3"
-              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-              <div className="text-center py-4">
-                <motion.div
-                  initial={{ scale: 0 }} animate={{ scale: 1 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                  className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-aw-green shadow-xl shadow-aw-green/30"
-                >
-                  <CheckCircle2 size={36} className="text-white" strokeWidth={2.5} />
-                </motion.div>
-
-                <h1 className="text-2xl font-black text-aw-slate mb-2">
-                  You&apos;re all set! 🎉
-                </h1>
-                <p className="text-sm text-aw-slate-mid font-medium max-w-xs mx-auto">
-                  Your EcoLink account is ready. Head to your dashboard to start tracking your carbon footprint.
-                </p>
-
-                <div className="mt-6 space-y-3 text-left rounded-2xl bg-aw-gray/60 p-5">
-                  <p className="text-xs font-bold uppercase tracking-wider text-aw-slate-mid mb-3">
-                    What to do next
-                  </p>
-                  {[
-                    "Connect Xero or upload a CSV to import transactions",
-                    "Run the AI classifier to auto-categorise spend",
-                    "Generate your first AASB S2 carbon report",
-                  ].map((item, i) => (
-                    <div key={i} className="flex items-start gap-2.5">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-aw-green text-[10px] font-black text-white mt-0.5">
-                        {i + 1}
-                      </span>
-                      <span className="text-sm text-aw-slate font-medium">{item}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <button onClick={goToDashboard}
-                  className="mt-6 flex w-full items-center justify-center gap-2 rounded-xl bg-aw-green py-3.5 text-sm font-bold text-white transition hover:bg-aw-green-dark active:scale-95 shadow-lg shadow-aw-green/20">
-                  Go to Dashboard <ArrowRight size={16} />
                 </button>
               </div>
             </motion.div>

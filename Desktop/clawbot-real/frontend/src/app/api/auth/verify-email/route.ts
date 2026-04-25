@@ -18,8 +18,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const rows = await sql<Array<{ id: string }>>`
-    SELECT id FROM users
+  const rows = await sql<Array<{ id: string; expired: boolean }>>`
+    SELECT id,
+           (verify_expires_at IS NOT NULL AND verify_expires_at < NOW()) AS expired
+    FROM   users
     WHERE  verify_token = ${token}
       AND  email_verified = false
     LIMIT  1
@@ -31,11 +33,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     );
   }
 
+  if (rows[0].expired) {
+    // Token existe mas expirou — limpa pra evitar reuso e manda usuário pedir reenvio
+    await sql`
+      UPDATE users
+      SET    verify_token = null,
+             verify_expires_at = null,
+             updated_at = NOW()
+      WHERE  id = ${rows[0].id}::uuid
+    `;
+    return NextResponse.redirect(
+      new URL("/login?error=token_expired", request.url),
+    );
+  }
+
   await sql`
     UPDATE users
-    SET    email_verified = true,
-           verify_token   = null,
-           updated_at     = NOW()
+    SET    email_verified    = true,
+           verify_token      = null,
+           verify_expires_at = null,
+           updated_at        = NOW()
     WHERE  id = ${rows[0].id}::uuid
   `;
 

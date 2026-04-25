@@ -80,11 +80,28 @@ export default function AASBPage() {
         {/* Rollout timeline */}
         <section className="mb-10">
           <h2 className="text-xl font-black text-aw-slate mb-4">Mandatory Reporting Timeline</h2>
-          <div className="rounded-2xl border border-aw-gray-border bg-white p-6 space-y-3">
+          <p className="text-sm text-aw-slate-mid mb-4 leading-relaxed">
+            Under the <em>Treasury Laws Amendment (Financial Market Infrastructure and Other Measures)
+            Act 2024</em>, entities must meet at least <strong>two of three</strong> size criteria
+            (revenue, assets, employees) or be NGER registered to fall in each group.
+          </p>
+          <div className="rounded-2xl border border-aw-gray-border bg-white p-6 space-y-5">
             {[
-              { period: "FY 2025–26", group: "Group 1", who: "Large entities — assets > $5B or revenue > $500M" },
-              { period: "FY 2026–27", group: "Group 2", who: "Mid-size entities — assets > $1B or revenue > $200M" },
-              { period: "FY 2027–28", group: "Group 3", who: "Smaller large entities" },
+              {
+                period: "From 1 Jan 2025 (FY 2024–25)",
+                group: "Group 1",
+                who: "Revenue ≥ $500M · Assets ≥ $1B · Employees ≥ 500 — or an NGER Group 1 / 2 reporter.",
+              },
+              {
+                period: "From 1 Jul 2026 (FY 2026–27)",
+                group: "Group 2",
+                who: "Revenue ≥ $200M · Assets ≥ $500M · Employees ≥ 250 — or an NGER reporter below Group 1.",
+              },
+              {
+                period: "From 1 Jul 2027 (FY 2027–28)",
+                group: "Group 3",
+                who: "Revenue ≥ $50M · Assets ≥ $25M · Employees ≥ 100.",
+              },
             ].map((row) => (
               <div key={row.period} className="flex flex-wrap items-start gap-3">
                 <span className="shrink-0 rounded-lg bg-aw-green-light px-3 py-1 text-xs font-bold text-aw-green">{row.period}</span>
@@ -93,6 +110,10 @@ export default function AASBPage() {
               </div>
             ))}
           </div>
+          <p className="text-xs text-aw-slate-mid mt-3 italic">
+            SMEs below these thresholds are not directly mandated, but will be asked for Scope 3
+            data by any Group 1–3 customer they supply.
+          </p>
         </section>
 
         {/* What EcoLink delivers */}

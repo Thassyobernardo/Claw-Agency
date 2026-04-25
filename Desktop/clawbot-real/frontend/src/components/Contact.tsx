@@ -47,13 +47,13 @@ export default function Contact() {
               <span className="text-aw-green">Scope 3 Obligations?</span>
             </motion.h2>
             <p className="text-lg text-aw-slate-mid max-w-lg mb-10 font-medium leading-relaxed">
-              Start your free 30-day trial today. No credit card required.
+              Start your free 14-day trial today — cancel anytime before it ends and you won&apos;t be charged.
               Our team will help you connect Xero and run your first carbon report within the hour.
             </p>
 
             <div className="flex flex-col gap-4">
               {[
-                "30-day free trial — no credit card needed",
+                "14-day free trial — cancel anytime before it ends",
                 "Xero connection in under 60 seconds · MYOB coming soon",
                 "AASB S1 / S2 compliant reports",
                 "Australian support team, AEST hours",

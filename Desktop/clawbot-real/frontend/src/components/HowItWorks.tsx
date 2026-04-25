@@ -1,12 +1,7 @@
 "use client";
 
-import { motion, AnimatePresence } from "framer-motion";
-import { Link2, Cpu, FileDown, ArrowRight, Play, X } from "lucide-react";
-import { useState } from "react";
-
-// ─── Replace VIDEO_ID with your Loom or YouTube ID when ready ────────────────
-const VIDEO_ID = "YOUR_YOUTUBE_OR_LOOM_ID";
-const VIDEO_PLATFORM: "youtube" | "loom" = "youtube"; // change to "loom" if using Loom
+import { motion } from "framer-motion";
+import { Link2, Cpu, FileDown, ArrowRight } from "lucide-react";
 
 const steps = [
   {
@@ -35,16 +30,7 @@ const steps = [
   },
 ];
 
-// ─── Video embed URL builder ──────────────────────────────────────────────────
-function getEmbedUrl(id: string, platform: "youtube" | "loom"): string {
-  if (platform === "loom") return `https://www.loom.com/embed/${id}?autoplay=1`;
-  return `https://www.youtube.com/embed/${id}?autoplay=1&rel=0`;
-}
-
 export default function HowItWorks() {
-  const [videoOpen, setVideoOpen] = useState(false);
-  const isPlaceholder = VIDEO_ID === "YOUR_YOUTUBE_OR_LOOM_ID";
-
   return (
     <section id="how-it-works" className="py-32 px-6 bg-aw-gray/40">
       <div className="max-w-6xl mx-auto">
@@ -121,105 +107,7 @@ export default function HowItWorks() {
             </motion.div>
           ))}
         </div>
-
-        {/* ── Video Section ─────────────────────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.2 }}
-          className="mt-24"
-        >
-          <p className="text-center text-sm font-semibold text-aw-slate-mid mb-6 uppercase tracking-widest">
-            See it in action
-          </p>
-
-          {/* Video thumbnail / placeholder */}
-          <div
-            className={`relative overflow-hidden rounded-3xl bg-aw-slate group ${isPlaceholder ? "cursor-default" : "cursor-pointer"}`}
-            style={{ aspectRatio: "16 / 9" }}
-            onClick={() => !isPlaceholder && setVideoOpen(true)}
-            onKeyDown={(e) => { if (!isPlaceholder && (e.key === "Enter" || e.key === " ")) setVideoOpen(true); }}
-            role={isPlaceholder ? "img" : "button"}
-            tabIndex={isPlaceholder ? undefined : 0}
-            aria-label={isPlaceholder ? "Explainer video coming soon" : "Play EcoLink explainer video"}
-          >
-            {/* Gradient overlay */}
-            <div className="absolute inset-0 bg-gradient-to-br from-aw-slate via-aw-slate/90 to-aw-green/40" />
-
-            {/* Placeholder content (hidden once video is set) */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 text-white px-8">
-              {/* Play button */}
-              <div className="flex h-20 w-20 items-center justify-center rounded-full bg-white/15 border-2 border-white/30 backdrop-blur-sm transition-all group-hover:bg-aw-green group-hover:border-aw-green group-hover:scale-110">
-                <Play size={32} className="text-white ml-1" fill="white" />
-              </div>
-
-              <div className="text-center">
-                <p className="text-2xl font-black mb-2">
-                  How EcoLink turns your Xero invoices into a carbon report in under 60 seconds
-                </p>
-                {isPlaceholder ? (
-                  <p className="text-sm text-white/50 font-medium">
-                    Explainer video coming soon
-                  </p>
-                ) : (
-                  <p className="text-sm text-white/70 font-medium">Click to watch · 60 seconds</p>
-                )}
-              </div>
-
-              {/* Decorative emission bars */}
-              <div className="flex items-end gap-2 opacity-20">
-                {[40, 65, 55, 80, 45, 70, 60].map((h, i) => (
-                  <div
-                    key={i}
-                    className="w-5 rounded-t bg-aw-green-mid"
-                    style={{ height: `${h}px` }}
-                  />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <p className="mt-4 text-center text-sm text-aw-slate-mid font-medium">
-            No credit card required · Free 30-day trial · Cancel any time
-          </p>
-        </motion.div>
       </div>
-
-      {/* ── Video Modal ───────────────────────────────────────────────────────── */}
-      <AnimatePresence>
-        {videoOpen && !isPlaceholder && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4"
-            onClick={() => setVideoOpen(false)}
-          >
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="relative w-full max-w-4xl"
-              onClick={(e) => e.stopPropagation()}
-              style={{ aspectRatio: "16 / 9" }}
-            >
-              <button
-                onClick={() => setVideoOpen(false)}
-                className="absolute -top-10 right-0 flex items-center gap-1.5 text-white/70 hover:text-white text-sm font-semibold"
-              >
-                <X size={16} /> Close
-              </button>
-              <iframe
-                src={getEmbedUrl(VIDEO_ID, VIDEO_PLATFORM)}
-                className="w-full h-full rounded-2xl"
-                allow="autoplay; fullscreen"
-                allowFullScreen
-              />
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </section>
   );
 }

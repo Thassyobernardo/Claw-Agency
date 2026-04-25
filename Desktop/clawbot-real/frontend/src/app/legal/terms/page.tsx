@@ -70,9 +70,9 @@ export default function TermsPage() {
             <h2 className="text-lg font-black text-aw-slate mb-3">4. Subscription &amp; Billing</h2>
             <div className="space-y-3 text-sm">
               {[
-                "All plans include a 14-day free trial. No credit card is required to start.",
+                "All plans include a 14-day free trial. A valid payment method is required at sign-up; it will not be charged if you cancel before the trial ends.",
                 "After the trial, continued access requires a paid subscription billed monthly via Stripe.",
-                "Prices are in Australian dollars (AUD) and exclude GST.",
+                "Prices are shown in Australian dollars (AUD). 10% GST is added at checkout for Australian customers and itemised on the Stripe tax invoice, in line with the A New Tax System (Goods and Services Tax) Act 1999.",
                 "You may cancel at any time via the billing portal. Access continues until the end of the current billing period. No refunds are issued for unused partial months.",
                 "EcoLink reserves the right to change pricing with 30 days' written notice to your registered email.",
                 "Accounts with failed payments are suspended after 7 days. Data is retained for 30 days after suspension before deletion.",

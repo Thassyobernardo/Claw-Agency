@@ -4,38 +4,41 @@ import { motion } from "framer-motion";
 import { Check, ArrowRight } from "lucide-react";
 import Link from "next/link";
 
+// NOTE: These plans must stay in sync with PLANS in `frontend/src/lib/stripe.ts`,
+// which is the single source of truth used by the Stripe checkout.
 const plans = [
   {
     name: "Starter",
     price: "$49",
     per: "/mo",
-    description: "For small businesses getting started with carbon reporting.",
+    description: "Perfect for sole traders and micro businesses.",
     features: [
+      "1 company / 1 user",
       "Up to 500 transactions / month",
-      "Xero connection (MYOB coming soon)",
-      "Scope 1, 2 & 3 classification",
-      "Annual carbon report (PDF)",
-      "NGA Factors — latest edition",
+      "Xero sync (MYOB coming soon)",
+      "AI auto-classification (Scope 1, 2 & 3)",
+      "AASB S2 PDF report",
+      "Sector benchmarking",
       "Email support",
     ],
-    excluded: ["AASB S2 disclosure fields", "Multi-user access", "API access"],
+    excluded: ["AASB S1 disclosure fields", "Multi-user access", "API access"],
     cta: "Start Free Trial",
     href: "/signup",
     popular: false,
   },
   {
     name: "Professional",
-    price: "$149",
+    price: "$99",
     per: "/mo",
-    description: "For growing businesses with compliance obligations.",
+    description: "For growing SMEs with compliance obligations.",
     features: [
+      "1 company / up to 5 users",
       "Unlimited transactions",
-      "Xero connection (MYOB coming soon)",
-      "Scope 1, 2 & 3 classification",
-      "Monthly & annual reports (PDF)",
-      "AASB S1 / S2 disclosure fields",
-      "Up to 5 team members",
-      "Manual review queue",
+      "Xero + MYOB sync",
+      "AI auto-classification + manual review queue",
+      "AASB S1 + S2 reports",
+      "Sector benchmarking",
+      "Custom emission factors",
       "Priority email support",
     ],
     excluded: ["White-label reports", "API access"],
@@ -45,29 +48,29 @@ const plans = [
   },
   {
     name: "Enterprise",
-    price: "Custom",
-    per: "",
-    description: "For accounting firms and large supply-chain networks.",
+    price: "$149",
+    per: "/mo",
+    description: "For multi-entity businesses and accounting firms.",
     features: [
-      "Unlimited transactions & companies",
-      "All accounting integrations",
-      "White-label branded reports",
-      "Full AASB S1 / S2 audit pack",
+      "Up to 5 companies",
+      "Unlimited users",
+      "All Professional features",
+      "Partner portal for accountants",
+      "White-label reports",
       "REST API access",
-      "Unlimited team members",
-      "Dedicated account manager",
-      "SLA + onboarding support",
+      "Dedicated onboarding call",
+      "Phone + email support",
     ],
     excluded: [],
-    cta: "Contact Us",
-    href: "#contact",
+    cta: "Start Free Trial",
+    href: "/signup",
     popular: false,
   },
 ];
 
 export default function Pricing() {
   return (
-    <section id="pricing" className="py-32 px-6 bg-white">
+    <section id="pricing" className="py-32 px-6 bg-slate-950 border-t border-slate-900">
       <div className="max-w-6xl mx-auto">
 
         {/* Header */}
@@ -78,25 +81,27 @@ export default function Pricing() {
             viewport={{ once: true }}
             className="text-xs font-bold uppercase tracking-widest text-aw-green mb-4"
           >
-            Pricing
+            Pricing & Audit
           </motion.p>
           <motion.h2
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1 }}
-            className="text-4xl md:text-6xl font-black text-aw-slate"
+            className="text-4xl md:text-6xl font-black text-white"
           >
-            Simple, Transparent Pricing.
+            High Performance, <br />
+            <span className="text-aw-green">Low Impact Cost.</span>
           </motion.h2>
           <motion.p
             initial={{ opacity: 0 }}
             whileInView={{ opacity: 1 }}
             viewport={{ once: true }}
             transition={{ delay: 0.2 }}
-            className="mt-4 text-lg text-aw-slate-mid font-medium max-w-xl mx-auto"
+            className="mt-4 text-lg text-slate-400 font-medium max-w-xl mx-auto"
           >
-            No lock-in contracts. Cancel any time. All prices in AUD, exclusive of GST.
+            All plans start with a 14-day free full-compliance audit. 
+            No credit card required to start. AUD pricing + GST.
           </motion.p>
         </div>
 
@@ -111,8 +116,8 @@ export default function Pricing() {
               transition={{ delay: idx * 0.1 }}
               className={`relative flex flex-col rounded-3xl border p-8 transition-all ${
                 plan.popular
-                  ? "border-aw-green bg-aw-slate text-white shadow-2xl shadow-aw-slate/20 scale-[1.02]"
-                  : "border-aw-gray-border bg-white shadow-sm hover:border-aw-green/30"
+                  ? "border-aw-green bg-slate-900 text-white shadow-2xl shadow-aw-green/5 scale-[1.02]"
+                  : "border-slate-800 bg-slate-900/40 text-white shadow-sm hover:border-aw-green/30"
               }`}
             >
               {plan.popular && (
@@ -122,20 +127,20 @@ export default function Pricing() {
               )}
 
               {/* Plan name + price */}
-              <p className={`text-xs font-bold uppercase tracking-widest mb-3 ${plan.popular ? "text-aw-green-mid" : "text-aw-slate-mid"}`}>
+              <p className={`text-xs font-bold uppercase tracking-widest mb-3 ${plan.popular ? "text-aw-green" : "text-slate-500"}`}>
                 {plan.name}
               </p>
               <div className="flex items-baseline gap-1 mb-3">
-                <span className={`text-5xl font-black ${plan.popular ? "text-white" : "text-aw-slate"}`}>
+                <span className="text-5xl font-black text-white">
                   {plan.price}
                 </span>
                 {plan.per && (
-                  <span className={`text-lg font-bold ${plan.popular ? "text-white/50" : "text-aw-slate-mid"}`}>
+                  <span className="text-lg font-bold text-slate-500">
                     {plan.per}
                   </span>
                 )}
               </div>
-              <p className={`text-sm font-medium mb-8 leading-relaxed ${plan.popular ? "text-white/70" : "text-aw-slate-mid"}`}>
+              <p className="text-sm font-medium mb-8 leading-relaxed text-slate-400">
                 {plan.description}
               </p>
 
@@ -146,15 +151,9 @@ export default function Pricing() {
                     <Check
                       size={16}
                       strokeWidth={3}
-                      className={`shrink-0 mt-0.5 ${plan.popular ? "text-aw-green-mid" : "text-aw-green"}`}
+                      className="shrink-0 mt-0.5 text-aw-green"
                     />
-                    <span className={plan.popular ? "text-white/85" : "text-aw-slate-mid"}>{f}</span>
-                  </li>
-                ))}
-                {plan.excluded.map((f) => (
-                  <li key={f} className="flex items-start gap-2.5 text-sm font-medium opacity-30">
-                    <div className="h-4 w-4 shrink-0 mt-0.5" />
-                    <span className={`line-through ${plan.popular ? "text-white" : "text-aw-slate-mid"}`}>{f}</span>
+                    <span className="text-slate-300">{f}</span>
                   </li>
                 ))}
               </ul>
@@ -165,7 +164,7 @@ export default function Pricing() {
                 className={`flex items-center justify-center gap-2 rounded-xl py-4 text-base font-bold transition-all active:scale-95 group ${
                   plan.popular
                     ? "bg-aw-green text-white hover:bg-aw-green-dark shadow-lg shadow-aw-green/30"
-                    : "bg-aw-gray border border-aw-gray-border text-aw-slate hover:border-aw-green/40 hover:text-aw-green"
+                    : "bg-slate-800 border border-slate-700 text-white hover:border-aw-green/40 hover:text-aw-green"
                 }`}
               >
                 {plan.cta}
@@ -175,8 +174,8 @@ export default function Pricing() {
           ))}
         </div>
 
-        <p className="mt-10 text-center text-xs text-aw-slate-mid font-medium">
-          All plans include a 30-day free trial. No credit card required to start.
+        <p className="mt-10 text-center text-xs text-slate-500 font-medium">
+          Secure checkout via Stripe. 256-bit AES encryption for all data syncs.
         </p>
       </div>
     </section>
