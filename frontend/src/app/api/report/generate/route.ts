@@ -266,6 +266,12 @@ function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>) {
   .limitations { font-size: 9pt; line-height: 1.8; color: #475569; padding-left: 20px; }
   .limitations li { margin-bottom: 8px; padding-left: 4px; }
   .limitations li::marker { color: #94a3b8; }
+  
+  .compliance-checklist { font-size: 9pt; background: #f1f5f9; padding: 12px; border-radius: 8px; margin-bottom: 20px; }
+  .compliance-checklist h4 { font-size: 10pt; color: #0f172a; margin-bottom: 8px; }
+  .compliance-checklist ul { list-style: none; padding-left: 0; }
+  .compliance-checklist li { margin-bottom: 4px; display: flex; align-items: flex-start; gap: 8px; }
+  .compliance-checklist li::before { content: '✓'; color: #10b981; font-weight: bold; }
 
   /* ── Print / PDF ── */
   .print-btn { position: fixed; bottom: 32px; right: 32px; z-index: 9999; display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg, #10b981, #059669); color: white; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 11pt; border: none; border-radius: 16px; padding: 14px 24px; cursor: pointer; box-shadow: 0 8px 30px rgba(16,185,129,0.4); transition: transform 0.2s, box-shadow 0.2s; text-decoration: none; }
@@ -311,6 +317,14 @@ function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>) {
       </div>
     </div>
 
+    <div class="ai-badge warning" style="margin-bottom: 16px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4);">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+      <div>
+        <h4>AASB S2 Mandatory Disclosure Notice</h4>
+        <p>This report has <strong>NOT been subject to independent assurance</strong>. Entities subject to mandatory AASB S2 disclosure must obtain limited assurance from a registered company auditor under AUASB GS 100.</p>
+      </div>
+    </div>
+
     ${reviewCount === 0 
       ? `
       <div class="ai-badge success">
@@ -344,7 +358,8 @@ function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>) {
   </div>
   <div class="cover-footer">
     Prepared by EcoLink Australia in accordance with AASB S2 Climate-related Disclosures &amp;
-    National Greenhouse Accounts Factors 2023–24 (Commonwealth of Australia)
+    National Greenhouse Accounts Factors 2023–24 (Commonwealth of Australia).<br/>
+    <strong>Assurance level: Not yet obtained.</strong> Effective date note: AASB S2 applies to periods beginning on/after 1 Jan 2025.
   </div>
 </div>
 
@@ -382,8 +397,48 @@ function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>) {
 </div>
 <div class="page-break"></div>
 
-<!-- SECTION 2: SCOPE 1 -->
-<h2>2. Scope 1 — Direct Emissions</h2>
+<!-- SECTION 2: GOVERNANCE & STRATEGY (AASB S2) -->
+<h2>2. Governance, Strategy & Risk Management (AASB S2)</h2>
+<div class="rule rule-slate"></div>
+<p>
+  Under AASB S2 paragraphs 6–25, entities must disclose how they govern, identify, and manage climate-related risks and opportunities.
+  The following sections outline ${safeCompanyName}'s current baseline posture.
+</p>
+
+<h3>Governance (AASB S2 §6–9)</h3>
+<div class="compliance-checklist">
+  <ul>
+    <li>The Board/management body oversees climate risk identification and sustainability strategy.</li>
+    <li>Climate metrics and transaction data are reviewed periodically via the EcoLink Carbon Accounting platform.</li>
+    <li>Management is directly accountable for ensuring mandatory disclosures are accurate and complete.</li>
+  </ul>
+</div>
+
+<h3>Strategy & Scenario Analysis (AASB S2 §10–22)</h3>
+<p>
+  ${safeCompanyName} is currently establishing a baseline of physical and transition risks.
+  At minimum, scenario analysis considering 1.5°C and 2°C pathways will be required to assess the resilience of the business model.
+</p>
+<div class="compliance-checklist">
+  <ul>
+    <li><strong>Physical Risks:</strong> Assessing operational exposure to extreme heat, flooding, and severe weather events.</li>
+    <li><strong>Transition Risks:</strong> Carbon pricing, regulatory shifts (including AASB S2 mandates), and changing consumer preferences towards low-carbon solutions.</li>
+    <li><strong>Opportunities:</strong> Resource efficiency, adoption of renewable energy (market-based Scope 2), and optimization of Scope 3 supply chains.</li>
+  </ul>
+</div>
+
+<h3>Risk Management (AASB S2 §23–25)</h3>
+<div class="compliance-checklist">
+  <ul>
+    <li>Climate risks are integrated into the overall enterprise risk management framework.</li>
+    <li>The process for identifying climate risks relies on accurate measurement of Scope 1, 2, and 3 emissions as a primary indicator of carbon exposure.</li>
+  </ul>
+</div>
+
+<div class="page-break"></div>
+
+<!-- SECTION 3: METRICS & TARGETS (SCOPE 1) -->
+<h2>3. Metrics: Scope 1 — Direct Emissions</h2>
 <div class="rule rule-blue"></div>
 <p>
   Scope 1 emissions arise from sources owned or controlled by the organisation.
@@ -399,14 +454,13 @@ ${txTable(txByScope(1))}
 </div>
 <div class="page-break"></div>
 
-<!-- SECTION 3: SCOPE 2 -->
-<h2>3. Scope 2 — Purchased Electricity</h2>
+<!-- SECTION 4: METRICS: SCOPE 2 -->
+<h2>4. Metrics: Scope 2 — Purchased Electricity</h2>
 <div class="rule rule-green"></div>
 <p>
   Scope 2 emissions are indirect GHG emissions from the consumption of purchased electricity.
   Emissions are calculated using the <strong>location-based method</strong> with state-specific
-  NGA 2023–24 grid emission factors (DCCEEW). The applicable factor for each transaction
-  is shown in the Emission Factors table in Section 5.
+  NGA 2023–24 grid emission factors (DCCEEW).
 </p>
 <h3>Transaction Detail</h3>
 ${txTable(txByScope(2))}
@@ -416,14 +470,12 @@ ${txTable(txByScope(2))}
 </div>
 <div class="page-break"></div>
 
-<!-- SECTION 4: SCOPE 3 -->
-<h2>4. Scope 3 — Value Chain Emissions</h2>
+<!-- SECTION 5: METRICS: SCOPE 3 -->
+<h2>5. Metrics: Scope 3 — Value Chain Emissions</h2>
 <div class="rule rule-purple"></div>
 <p>
   Scope 3 emissions include all indirect GHG emissions outside of Scope 2 that occur in
-  the value chain. The following categories have been identified as material for FY 2023–24:
-  <strong>Category 6 — Business Travel</strong> (domestic air travel) and
-  <strong>Category 4 — Upstream Transportation</strong> (road freight of purchased goods).
+  the value chain. As per GHG Protocol mapping applied in EcoLink, all material categories (1 to 15) are actively screened.
 </p>
 <h3>Transaction Detail</h3>
 ${txTable(txByScope(3))}
@@ -433,8 +485,8 @@ ${txTable(txByScope(3))}
 </div>
 <div class="page-break"></div>
 
-<!-- SECTION 5: EMISSION FACTORS -->
-<h2>5. Emission Factors &amp; Methodology</h2>
+<!-- SECTION 6: EMISSION FACTORS -->
+<h2>6. Emission Factors &amp; Methodology</h2>
 <div class="rule rule-slate"></div>
 <p>
   All emission factors are sourced from the <strong>NGA Factors 2023–24</strong> (DCCEEW),
@@ -468,8 +520,8 @@ ${txTable(txByScope(3))}
 </ul>
 <div class="page-break"></div>
 
-<!-- SECTION 6: ASSURANCE -->
-<h2>6. Assurance &amp; Disclosure Statement</h2>
+<!-- SECTION 7: ASSURANCE -->
+<h2>7. Assurance &amp; Disclosure Statement</h2>
 <div class="rule rule-slate"></div>
 <p>This report has been prepared in accordance with the following frameworks:</p>
 <table class="framework-table">
