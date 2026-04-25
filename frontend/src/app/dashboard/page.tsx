@@ -8,10 +8,10 @@ import {
   Upload, PenLine,
 } from "lucide-react";
 import useSWR from "swr";
-import { Loader2 } from "lucide-react";
 
 const fetcher = (url: string) => fetch(url).then((res) => res.json());
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useState, Suspense, useCallback } from "react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
