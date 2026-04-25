@@ -5,6 +5,7 @@ import {
   Leaf, Link2, RefreshCw, FileDown, AlertCircle,
   TrendingDown, Zap, Truck, ShoppingBag, BarChart3, Plane,
   CheckCircle2, XCircle, Loader2, Sparkles, Target, CreditCard,
+  Upload, PenLine,
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -588,33 +589,74 @@ function DashboardInner() {
           </div>
         </div>
 
-        {/* ── Connect Xero CTA (hidden once connected) ──── */}
-        {!xeroStatus?.connected && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
-            className="rounded-3xl border-2 border-dashed border-aw-green/30 bg-aw-green-light/30 p-10 text-center"
-          >
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-aw-green-light">
-              <Link2 size={24} className="text-aw-green" />
-            </div>
-            <h3 className="text-xl font-black text-aw-slate mb-2">Connect Your Accounting Software</h3>
-            <p className="text-aw-slate-mid font-medium mb-6 max-w-md mx-auto text-sm">
-              Authorise EcoLink to read your transactions and we&apos;ll classify every line item automatically.
-            </p>
-            <div className="flex items-center justify-center gap-4 flex-wrap">
-              <Link href="/api/auth/xero"
-                className="flex items-center gap-2 rounded-xl bg-aw-green px-8 py-3 text-white font-bold transition-all hover:bg-aw-green-dark active:scale-95 shadow-lg shadow-aw-green/20">
-                <Link2 size={18} /> Connect Xero
-              </Link>
-              <div
-                title="MYOB integration coming soon"
-                className="flex items-center gap-2 rounded-xl border border-aw-gray-border bg-white/60 px-8 py-3 text-aw-slate-light font-bold cursor-not-allowed select-none"
-              >
-                <Link2 size={18} /> MYOB
-                <span className="rounded-md bg-aw-slate/10 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider">Soon</span>
+        {/* ── Data Input Section — always visible ──── */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-aw-slate-mid mb-4">Add Transaction Data</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+
+            {/* Option 1 — Connect Xero */}
+            <div className={`rounded-2xl border-2 p-6 flex flex-col gap-4 transition-all ${
+              xeroStatus?.connected
+                ? "border-aw-green/40 bg-aw-green-light/20"
+                : "border-dashed border-aw-gray-border bg-white hover:border-aw-green/30"
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-aw-green-light flex items-center justify-center">
+                  <Link2 size={20} className="text-aw-green" />
+                </div>
+                <div>
+                  <p className="font-bold text-aw-slate text-sm">Connect Xero</p>
+                  <p className="text-xs text-aw-slate-mid">Auto-import all transactions</p>
+                </div>
               </div>
+              {xeroStatus?.connected ? (
+                <div className="flex items-center gap-2 text-aw-green text-sm font-bold">
+                  <CheckCircle2 size={16} /> {xeroStatus.tenantName ?? "Xero Connected"}
+                </div>
+              ) : (
+                <Link href="/api/auth/xero"
+                  className="mt-auto w-full flex items-center justify-center gap-2 rounded-xl bg-aw-green px-4 py-3 text-white font-bold text-sm transition-all hover:bg-aw-green-dark active:scale-95">
+                  <Link2 size={16} /> Connect Xero
+                </Link>
+              )}
             </div>
-          </motion.div>
-        )}
+
+            {/* Option 2 — Import CSV/Excel */}
+            <Link href="/import"
+              className="rounded-2xl border-2 border-dashed border-aw-gray-border bg-white p-6 flex flex-col gap-4 hover:border-blue-400/50 hover:bg-blue-50/30 transition-all group">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition">
+                  <Upload size={20} className="text-blue-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-aw-slate text-sm">Import CSV / Excel</p>
+                  <p className="text-xs text-aw-slate-mid">Upload bank statement or spreadsheet</p>
+                </div>
+              </div>
+              <div className="mt-auto w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-white font-bold text-sm group-hover:bg-blue-700 transition">
+                <Upload size={16} /> Upload File
+              </div>
+            </Link>
+
+            {/* Option 3 — Manual Entry */}
+            <Link href="/import?tab=manual"
+              className="rounded-2xl border-2 border-dashed border-aw-gray-border bg-white p-6 flex flex-col gap-4 hover:border-purple-400/50 hover:bg-purple-50/30 transition-all group">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center group-hover:bg-purple-100 transition">
+                  <PenLine size={20} className="text-purple-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-aw-slate text-sm">Manual Entry</p>
+                  <p className="text-xs text-aw-slate-mid">Type transactions directly into the system</p>
+                </div>
+              </div>
+              <div className="mt-auto w-full flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-3 text-white font-bold text-sm group-hover:bg-purple-700 transition">
+                <PenLine size={16} /> Add Manually
+              </div>
+            </Link>
+
+          </div>
+        </motion.div>
 
       </main>
     </div>
