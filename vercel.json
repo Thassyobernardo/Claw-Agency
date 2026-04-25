@@ -1,6 +1,0 @@
-{
-  "buildCommand": "cd Desktop/clawbot-real/frontend && npm install && npm run build",
-  "outputDirectory": "Desktop/clawbot-real/frontend/.next",
-  "installCommand": "cd Desktop/clawbot-real/frontend && npm install",
-  "framework": "nextjs"
-}
