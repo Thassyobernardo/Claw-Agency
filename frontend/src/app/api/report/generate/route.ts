@@ -56,7 +56,7 @@ function fmtAud(n: number) {
 // ─── Fetch all report data ────────────────────────────────────────────────────
 
 async function fetchReportData(companyId: string) {
-  const [companyRows, txRows, totals, efRows, reviewRows] = await Promise.all([
+  const [companyRows, txRows, totals, efRows, reviewRows, majorityRows] = await Promise.all([
     sql<CompanyRow[]>`
       SELECT name, abn, plan FROM companies WHERE id = ${companyId}
     `,
@@ -103,15 +103,26 @@ async function fetchReportData(companyId: string) {
       FROM transactions
       WHERE company_id = ${companyId} AND classification_status = 'needs_review'
     `,
+    sql`
+      SELECT COUNT(*) AS count
+      FROM transactions
+      WHERE company_id = ${companyId}
+        AND classification_status = 'needs_review'
+        AND category_id IS NOT NULL
+    `,
   ]);
 
-  return { company: companyRows[0], txRows, totals, efRows, reviewCount: Number(reviewRows[0]?.count || 0) };
+  const reviewCount  = Number(reviewRows[0]?.count  || 0);
+  const majorityCount = Number(majorityRows[0]?.count || 0);
+  const fullDisagreement = reviewCount - majorityCount;
+
+  return { company: companyRows[0], txRows, totals, efRows, reviewCount, majorityCount, fullDisagreement };
 }
 
 // ─── HTML template ────────────────────────────────────────────────────────────
 
 function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>) {
-  const { company, txRows, totals, efRows, reviewCount } = data;
+  const { company, txRows, totals, efRows, reviewCount, majorityCount, fullDisagreement } = data;
 
   const totalCo2e = totals.reduce((s: number, r: any) => s + Number(r.co2e_t), 0).toFixed(2);
   const totalTx   = totals.reduce((s: number, r: any) => s + Number(r.tx_count), 0);
@@ -255,9 +266,21 @@ function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>) {
   .limitations { font-size: 9pt; line-height: 1.8; color: #475569; padding-left: 20px; }
   .limitations li { margin-bottom: 8px; padding-left: 4px; }
   .limitations li::marker { color: #94a3b8; }
+
+  /* ── Print / PDF ── */
+  .print-btn { position: fixed; bottom: 32px; right: 32px; z-index: 9999; display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg, #10b981, #059669); color: white; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 11pt; border: none; border-radius: 16px; padding: 14px 24px; cursor: pointer; box-shadow: 0 8px 30px rgba(16,185,129,0.4); transition: transform 0.2s, box-shadow 0.2s; text-decoration: none; }
+  .print-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(16,185,129,0.5); }
+  .print-btn svg { width: 20px; height: 20px; }
+  @media print { .print-btn { display: none !important; } }
 </style>
 </head>
 <body>
+
+<!-- FLOATING PDF BUTTON -->
+<button class="print-btn" onclick="window.print()">
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+  Salvar como PDF
+</button>
 
 <!-- COVER PAGE -->
 <div class="cover">
@@ -293,8 +316,8 @@ function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>) {
       <div class="ai-badge success">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
         <div>
-          <h4>Relatório Confiável: Análise de Inteligência Artificial</h4>
-          <p>Os dados foram analisados e certificados por um ensemble de 3 IAs avançadas (GPT-4o, Gemini 2.5 e DeepSeek) atuando em paralelo. Não foram detectadas divergências na classificação S2.</p>
+          <h4>Relatório Confiável — Consenso Total das 3 IAs</h4>
+          <p>Os dados foram analisados e certificados por GPT-4o, Gemini 2.5 e DeepSeek atuando em paralelo. Não foram detectadas divergências na classificação.</p>
         </div>
       </div>
       `
@@ -302,8 +325,18 @@ function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>) {
       <div class="ai-badge warning">
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
         <div>
-          <h4>Aviso: Divergência Detectada na Análise de IA</h4>
-          <p>Atenção: Existem <strong>${reviewCount}</strong> transações com divergência entre as 3 IAs analisadoras (risco de alucinação ou dados ambíguos) aguardando sua revisão manual. Este relatório está omitindo dados não-revisados.</p>
+          <h4>Aviso: Divergência Detectada — ${reviewCount} Transações Aguardam Revisão</h4>
+          <p style="margin-bottom:10px">As 3 IAs (GPT-4o, Gemini 2.5 e DeepSeek) identificaram inconsistências em <strong>${reviewCount}</strong> transações. Detalhamento:</p>
+          <div style="display:flex;gap:16px;flex-wrap:wrap">
+            <div style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);border-radius:10px;padding:10px 16px;min-width:140px">
+              <div style="font-family:'Outfit',sans-serif;font-size:22pt;font-weight:900;color:white;line-height:1">${majorityCount}</div>
+              <div style="font-size:8.5pt;opacity:0.85;margin-top:4px">✅ 2/3 IAs em consenso<br/>(categoria detectada,<br/>valor divergente)</div>
+            </div>
+            <div style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);border-radius:10px;padding:10px 16px;min-width:140px">
+              <div style="font-family:'Outfit',sans-serif;font-size:22pt;font-weight:900;color:white;line-height:1">${fullDisagreement}</div>
+              <div style="font-size:8.5pt;opacity:0.85;margin-top:4px">❌ Desacordo total<br/>(classificação<br/>ambígua)</div>
+            </div>
+          </div>
         </div>
       </div>
       `
