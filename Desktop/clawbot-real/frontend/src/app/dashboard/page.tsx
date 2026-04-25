@@ -589,12 +589,12 @@ function DashboardInner() {
           </div>
         </div>
 
-        {/* ── Data Input Section — always visible ──── */}
+        {/* Data Input Section - always visible */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
           <h3 className="text-sm font-bold uppercase tracking-wider text-aw-slate-mid mb-4">Add Transaction Data</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
-            {/* Option 1 — Connect Xero */}
+            {/* Option 1 - Connect Xero */}
             <div className={`rounded-2xl border-2 p-6 flex flex-col gap-4 transition-all ${
               xeroStatus?.connected
                 ? "border-aw-green/40 bg-aw-green-light/20"
@@ -621,6 +621,60 @@ function DashboardInner() {
               )}
             </div>
 
-            {/* Option 2 — Import CSV/Excel */}
+            {/* Option 2 - Import CSV/Excel */}
             <Link href="/import"
-              className="rounded-2xl border-2 border-dashed border-aw-gray-border bg-white p-6 flex flex-col gap-4 hover:border-blue-400/50 hover:bg-blue-50/30 t
+              className="rounded-2xl border-2 border-dashed border-aw-gray-border bg-white p-6 flex flex-col gap-4 hover:border-blue-400/50 hover:bg-blue-50/30 transition-all">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                  <Upload size={20} className="text-blue-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-aw-slate text-sm">Import CSV / Excel</p>
+                  <p className="text-xs text-aw-slate-mid">Upload a spreadsheet of transactions</p>
+                </div>
+              </div>
+              <span className="mt-auto w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-white font-bold text-sm transition-all hover:bg-blue-700">
+                <Upload size={16} /> Import file
+              </span>
+            </Link>
+
+            {/* Option 3 - Manual Entry */}
+            <Link href="/transactions/new"
+              className="rounded-2xl border-2 border-dashed border-aw-gray-border bg-white p-6 flex flex-col gap-4 hover:border-purple-400/50 hover:bg-purple-50/30 transition-all">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-purple-50 flex items-center justify-center">
+                  <PenLine size={20} className="text-purple-600" />
+                </div>
+                <div>
+                  <p className="font-bold text-aw-slate text-sm">Manual Entry</p>
+                  <p className="text-xs text-aw-slate-mid">Add transactions one by one</p>
+                </div>
+              </div>
+              <span className="mt-auto w-full flex items-center justify-center gap-2 rounded-xl bg-purple-600 px-4 py-3 text-white font-bold text-sm transition-all hover:bg-purple-700">
+                <PenLine size={16} /> Add transaction
+              </span>
+            </Link>
+
+          </div>
+        </motion.div>
+
+      </main>
+    </div>
+  );
+}
+
+// ─── Default export — wraps DashboardInner in Suspense ──────────────────────
+
+export default function DashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-aw-gray/40">
+          <Loader2 className="animate-spin text-aw-green" size={32} />
+        </div>
+      }
+    >
+      <DashboardInner />
+    </Suspense>
+  );
+}
