@@ -49,9 +49,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   // ─── Exchange code for tokens ─────────────────────────────────────────────
+  // CRITICAL: redirect_uri sent here must EXACTLY match the one sent in step 1.
+  // We use the same request origin so they always agree.
   let tokens: XeroTokenSet;
   try {
-    tokens = await exchangeCodeForTokens(code);
+    tokens = await exchangeCodeForTokens(code, request.nextUrl.origin);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[xero/callback] Token exchange failed:", msg);

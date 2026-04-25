@@ -58,14 +58,38 @@ const SCOPES = [
   "accounting.settings.read",         // org info, chart of accounts
 ].join(" ");
 
-function getCredentials() {
+/**
+ * Resolve the Xero OAuth redirect URI.
+ *
+ * Priority:
+ *   1. Explicit override        — XERO_REDIRECT_URI env var
+ *   2. App URL                  — NEXT_PUBLIC_APP_URL + /api/auth/xero/callback
+ *   3. Caller-supplied origin   — derived from the incoming request
+ *   4. Localhost fallback       — http://localhost:3000/api/auth/xero/callback
+ *
+ * Whichever URI is returned MUST be registered in your Xero app at
+ * https://developer.xero.com/app/manage  (Configuration → Redirect URIs).
+ */
+function resolveRedirectUri(originOverride?: string): string {
+  const envOverride = process.env.XERO_REDIRECT_URI;
+  if (envOverride) return envOverride;
+
+  const appUrl = originOverride ?? process.env.NEXT_PUBLIC_APP_URL;
+  if (appUrl) {
+    return `${appUrl.replace(/\/+$/, "")}/api/auth/xero/callback`;
+  }
+
+  return "http://localhost:3000/api/auth/xero/callback";
+}
+
+function getCredentials(originOverride?: string) {
   const clientId     = process.env.XERO_CLIENT_ID;
   const clientSecret = process.env.XERO_CLIENT_SECRET;
-  const redirectUri  = process.env.XERO_REDIRECT_URI;
+  const redirectUri  = resolveRedirectUri(originOverride);
 
-  if (!clientId || !clientSecret || !redirectUri) {
+  if (!clientId || !clientSecret) {
     throw new Error(
-      "Xero credentials not configured. Set XERO_CLIENT_ID, XERO_CLIENT_SECRET, and XERO_REDIRECT_URI in .env.local"
+      "Xero credentials not configured. Set XERO_CLIENT_ID and XERO_CLIENT_SECRET in .env.local"
     );
   }
   return { clientId, clientSecret, redirectUri };
@@ -77,10 +101,13 @@ function getCredentials() {
 
 /**
  * Build the Xero authorization URL.
- * @param state  Random string to protect against CSRF (store in session cookie).
+ * @param state          Random string to protect against CSRF (store in session cookie).
+ * @param originOverride Optional explicit origin (e.g., "https://claw-agency.vercel.app")
+ *                       to override env-derived redirect URI. Pass the request's origin
+ *                       so the redirect URI matches the host the user is currently on.
  */
-export function buildAuthorizationUrl(state: string): string {
-  const { clientId, redirectUri } = getCredentials();
+export function buildAuthorizationUrl(state: string, originOverride?: string): string {
+  const { clientId, redirectUri } = getCredentials(originOverride);
 
   const params = new URLSearchParams({
     response_type: "code",
@@ -90,15 +117,29 @@ export function buildAuthorizationUrl(state: string): string {
     state,
   });
 
+  // Helpful breadcrumb in server logs to debug "invalid_redirect_uri" — log only the
+  // redirect URI itself, never the client_id/secret.
+  if (process.env.NODE_ENV !== "production") {
+    console.log(`[xero/auth] redirect_uri=${redirectUri}`);
+  }
+
   return `${XERO_AUTH_URL}?${params.toString()}`;
+}
+
+/** Public helper — exposes the resolved redirect URI for diagnostic endpoints. */
+export function getResolvedRedirectUri(originOverride?: string): string {
+  return resolveRedirectUri(originOverride);
 }
 
 // ---------------------------------------------------------------------------
 // Token Exchange (authorization_code → token set)
 // ---------------------------------------------------------------------------
 
-export async function exchangeCodeForTokens(code: string): Promise<XeroTokenSet> {
-  const { clientId, clientSecret, redirectUri } = getCredentials();
+export async function exchangeCodeForTokens(
+  code: string,
+  originOverride?: string,
+): Promise<XeroTokenSet> {
+  const { clientId, clientSecret, redirectUri } = getCredentials(originOverride);
 
   const body = new URLSearchParams({
     grant_type:   "authorization_code",
