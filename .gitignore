@@ -1,0 +1,60 @@
+# ── Node ───────────────────────────────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ── Next.js ────────────────────────────────────────────────────────────────────
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.vercel/
+frontend/*.tsbuildinfo
+frontend/next-env.d.ts
+
+# ── SECRETS — NEVER COMMIT ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.*
+frontend/.env.local
+frontend/.env.*.local
+
+# Artefatos dos scripts de deploy (contem secrets)
+scripts/.vercel_env.txt
+scripts/.stripe_price_ids.txt
+webhook_secret.txt
+frontend/webhook_secret.txt
+
+# ── Database ───────────────────────────────────────────────────────────────────
+*.sqlite
+*.db
+
+# ── OS ─────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ────────────────────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ── Test / Coverage ────────────────────────────────────────────────────────────
+coverage/
+.nyc_output/
+
+# ── Misc ───────────────────────────────────────────────────────────────────────
+*.pem
+*.key
+*.cert
+
+# ── Ruflo Swarm ────────────────────────────────────────────────────────────────
+agents/.swarm/
+agents/*.log

@@ -1,0 +1,66 @@
+﻿{
+  "swarm": {
+    "name": "clawbot-swarm",
+    "topology": "mesh",
+    "maxAgents": 5,
+    "autoScale": true,
+    "memory": {
+      "db": ".swarm/memory.db",
+      "maxEntries": 10000,
+      "persistInterval": 60000
+    }
+  },
+  "agents": [
+    {
+      "name": "carbon_auditor",
+      "description": "Auditor de carbono NGA - Scope 1, 2, 3",
+      "prompt": "Voce eh o auditor de carbono da EcoLink Australia. Classifique transacoes financeiras em categorias NGA e calcule emissoes CO2e seguindo os fatores DCCEEW 2023-24. Nunca invente fatores de emissao. Se o fator nao existir, retorne FACTOR_NOT_FOUND.",
+      "skills": ["spend_to_carbon_analyzer"],
+      "priority": "high",
+      "autoRestart": true
+    },
+    {
+      "name": "data_researcher",
+      "description": "Pesquisador de regulamentacao NGA e AASB S1/S2",
+      "prompt": "Voce eh o pesquisador de dados da EcoLink. Busque atualizacoes de fatores de emissao NGA publicados pelo DCCEEW e novidades regulatorias AASB S1/S2. Sempre cite a fonte e o ano.",
+      "skills": ["autoresearch"],
+      "priority": "medium",
+      "autoRestart": true
+    },
+    {
+      "name": "lead_hunter",
+      "description": "Prospeccao de SMEs australianas para ESG",
+      "prompt": "Voce eh o agente de prospeccao da EcoLink Australia. Identifique SMEs australianas que precisam de conformidade ESG e Scope 3 reporting. Gere listas de contatos com nome, email e setor.",
+      "skills": ["hunter"],
+      "priority": "medium",
+      "autoRestart": false
+    },
+    {
+      "name": "report_writer",
+      "description": "Redator de relatorios AASB S1/S2",
+      "prompt": "Voce eh o redator de relatorios da EcoLink Australia. Com base nos dados de emissoes calculados pelo carbon_auditor, gere relatorios estruturados no formato AASB S1/S2.",
+      "skills": ["spend_to_carbon_analyzer"],
+      "priority": "high",
+      "autoRestart": true
+    },
+    {
+      "name": "orchestrator",
+      "description": "Orquestrador central do swarm EcoLink",
+      "prompt": "Voce eh o orquestrador do swarm EcoLink. Coordene os agentes carbon_auditor, data_researcher, lead_hunter e report_writer. Distribua tarefas por prioridade e escale para operador humano quando um agente falhar.",
+      "skills": [],
+      "priority": "critical",
+      "autoRestart": true
+    }
+  ],
+  "security": {
+    "sandboxEnabled": true,
+    "pathValidation": true,
+    "allowedPaths": ["./skills", "./agents", "./output"],
+    "blockedPaths": [".env", "database/", "scripts/"]
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "outputFile": "./agents/.swarm/swarm.log"
+  }
+}

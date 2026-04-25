@@ -1,0 +1,5 @@
+# EcoLink Security Agent — Ignore List
+# Arquivos listados aqui não serão alertados pelo scanner de segredos.
+
+# Falsos positivos conhecidos (mensagens de erro de validação de senha)
+frontend/src/app/onboarding/page.tsx

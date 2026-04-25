@@ -1,0 +1,30 @@
+{
+  "name": "ecolink-australia",
+  "version": "1.0.0",
+  "description": "EcoLink Australia — Scope 3 Carbon Accounting SaaS for Australian SMEs",
+  "main": "index.js",
+  "scripts": {
+    "migrate": "ts-node database/migrate.ts",
+    "migrate:schema": "ts-node database/migrate.ts --schema",
+    "migrate:seed": "ts-node database/migrate.ts --seed",
+    "migrate:demo": "ts-node database/seed-demo.ts",
+    "migrate:user": "ts-node database/seed-user.ts",
+    "api:dev": "uvicorn skills.spend_to_carbon_analyzer.main:app --reload --port 8000",
+    "api:start": "uvicorn skills.spend_to_carbon_analyzer.main:app --host 0.0.0.0 --port 8000",
+    "security:dev": "uvicorn skills.security_agent.main:app --reload --port 8001",
+    "security:start": "uvicorn skills.security_agent.main:app --host 0.0.0.0 --port 8001",
+    "security:scan": "python -m skills.security_agent.run_scan"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "postgres": "^3.4.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "playwright": "^1.59.1"
+  }
+}

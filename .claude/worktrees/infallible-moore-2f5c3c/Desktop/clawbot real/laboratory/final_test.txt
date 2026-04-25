@@ -1,0 +1,62 @@
+[dotenv@17.3.1] injecting env (2) from .env -- tip: ΓÜÖ∩╕Å  load multiple .env files with { path: ['.env.local', '.env'] }
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ≡ƒ¢á∩╕Å  run anywhere with `dotenvx run -- yourcommand`
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ΓÜÖ∩╕Å  enable debug logging with { debug: true }
+≡ƒº¬ LAB TEST: Initiating Manual Morning Update Pipeline...
+≡ƒîà Morning Update: Starting Premium Pipeline [Claude 3.5 + Flux]...
+≡ƒöì News: Searching for "latest global AI and tech news impact 2026"...
+ΓÜá∩╕Å OpenRouter: AI Error (likely model routing issue): {
+  error: {
+    message: 'Provider returned error',
+    code: 400,
+    metadata: {
+      raw: '{"message":"The provided model identifier is invalid."}',
+      provider_name: 'Amazon Bedrock',
+      is_byok: false
+    }
+  },
+  user_id: 'user_3BMTyQFJ6fbXMvabqGslrBdqspB'
+}
+ΓÜá∩╕Å OpenRouter: Falling back to Local Mock to continue pipeline...
+≡ƒÄ¿ Image: Generating background with Pollinations.ai...
+Γ£à Image: Generated successfully via Pollinations: https://image.pollinations.ai/prompt/A%20high-quality%2C%20sun-drenched%20sun-flared%20shot%20of%20a%20modern%20clean%20electrician%20van%20or%20cafe%20in%20Melbourne%2C%20premium%20lighting%2C%208k%2C%20realistic.%2C%20high-energy%2C%20sun-drenched%2C%20Melbourne%2FSydney%20vibes%2C%20premium%20lighting%2C%20realistic%2C%208k?width=1080&height=1350&seed=41544&nologo=true
+≡ƒô╕ Render: Rendering slide to morning_1.jpg...
+Γ£à Render: Finished morning_1.jpg
+≡ƒô╕ Render: Rendering slide to morning_2.jpg...
+Γ£à Render: Finished morning_2.jpg
+≡ƒô╕ Render: Rendering slide to morning_3.jpg...
+Γ£à Render: Finished morning_3.jpg
+≡ƒô╕ Render: Rendering slide to morning_4.jpg...
+Γ£à Render: Finished morning_4.jpg
+≡ƒô╕ Render: Rendering slide to morning_5.jpg...
+Γ£à Render: Finished morning_5.jpg
+Γ£à Morning Update: 5 Slides Rendered Successfully
+≡ƒÄë LAB TEST: Pipeline completed successfully.
+SCRIPT GENERATED: {
+  "slide_1": {
+    "title": "Bigger than your morning coffee",
+    "subtitle": "A new AI shift is hitting Melbourne sparks."
+  },
+  "slide_2": {
+    "title": "The Old Way",
+    "text": "Losing 10h a week on admin while on the tools."
+  },
+  "slide_3": {
+    "title": "The AI Shift",
+    "text": "24/7 DMs handled while you sleep."
+  },
+  "slide_4": {
+    "title": "The Multiplier",
+    "text": "3x more bookings without a single extra call."
+  },
+  "slide_5": {
+    "title": "Get Sorted",
+    "subtitle": "DM 'AGENCY' for a free audit. No drama."
+  },
+  "caption": "Aussie lifestyle copy for Instagram. Time to get sorted, mate! Drop us a DM. #AUTradies #MelbourneSparkies #ClawAgency",
+  "hashtags": [
+    "#AUTradies",
+    "#MelbourneSparkies",
+    "#ClawAgency"
+  ],
+  "visual_prompt": "A high-quality, sun-drenched sun-flared shot of a modern clean electrician van or cafe in Melbourne, premium lighting, 8k, realistic."
+}

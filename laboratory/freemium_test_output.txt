@@ -1,0 +1,64 @@
+[dotenv@17.3.1] injecting env (3) from .env -- tip: ΓÜÖ∩╕Å  specify custom .env file path with { path: '/custom/path/.env' }
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ΓÜÖ∩╕Å  suppress all logs with { quiet: true }
+[dotenv@17.3.1] injecting env (0) from .env -- tip: ΓÜí∩╕Å secrets for agents: https://dotenvx.com/as2
+≡ƒº¬ FREEMIUM TEST: Initiating Lead Magnet Pipeline...
+≡ƒºá Freemium AI: Analyzing user photo context and text...
+ΓÜá∩╕Å OpenRouter: AI Error (likely model routing issue): {
+  error: {
+    message: 'Provider returned error',
+    code: 400,
+    metadata: {
+      raw: '{"message":"The provided model identifier is invalid."}',
+      provider_name: 'Amazon Bedrock',
+      is_byok: false
+    }
+  },
+  user_id: 'user_3BMTyQFJ6fbXMvabqGslrBdqspB'
+}
+≡ƒô£ Script Generated: {
+  "slide_1": {
+    "title": "Bigger than your morning coffee",
+    "subtitle": "A new AI shift is hitting Melbourne sparks."
+  },
+  "slide_2": {
+    "title": "The Old Way",
+    "text": "Losing 10h a week on admin while on the tools."
+  },
+  "slide_3": {
+    "title": "The AI Shift",
+ΓÜá∩╕Å OpenRouter: Falling back to Local Mock to continue pipeline...
+    "text": "24/7 DMs handled while you sleep."
+  },
+  "slide_4": {
+    "title": "The Multiplier",
+    "text": "3x more bookings without a single extra call."
+  },
+  "slide_5": {
+    "title": "Get Sorted",
+    "subtitle": "DM 'AGENCY' for a free audit on clawagency.online. No drama."
+  },
+  "caption": "Aussie lifestyle copy for Instagram. Time to get sorted, mate! Visit clawagency.online or drop us a DM. #AUTradies #MelbourneSparkies #ClawAgency",
+  "hashtags": [
+    "#AUTradies",
+    "#MelbourneSparkies",
+    "#ClawAgency"
+  ],
+  "visual_prompt": "A high-quality, sun-drenched sun-flared shot of a modern clean electrician van or cafe in Melbourne, premium lighting, 8k, realistic."
+}
+≡ƒÄ¿ Image: Re-imagining user photo with Together AI (FLUX.1-dev-img2img)...
+Γ¥î Image: Together AI img2img Error: {
+  id: 'odWrJqL-2kFHot-9e5f38ed4c341327-SEA',
+  error: {
+    message: 'Unable to access model black-forest-labs/FLUX.1-dev-img2img. Please visit https://api.together.ai/models to view the list of supported models.',
+    type: 'invalid_request_error',
+    param: null,
+    code: 'model_not_available'
+  }
+}
+≡ƒô╕ Render: Rendering cinematic slide to freemium_1.jpg...
+Γ£à Render: Finished freemium_1.jpg
+≡ƒô╕ Render: Rendering cinematic slide to freemium_2.jpg...
+Γ£à Render: Finished freemium_2.jpg
+≡ƒô╕ Render: Rendering cinematic slide to freemium_3.jpg...
+Γ£à Render: Finished freemium_3.jpg
+≡ƒÄë FREEMIUM TEST: Pipeline completed successfully. Check output/ directory.
