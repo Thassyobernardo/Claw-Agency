@@ -10,6 +10,7 @@ import {
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState, Suspense, useCallback } from "react";
+import ComplianceWarnings from "@/components/ComplianceWarnings";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -339,6 +340,9 @@ function DashboardInner() {
       </header>
 
       <main className="mx-auto max-w-7xl px-6 py-10 space-y-8">
+
+        {/* ── AASB S2 Compliance Warnings (state, activity data, governance, etc.) ── */}
+        <ComplianceWarnings />
 
         {/* ── Page title ──────────────────────────────────────────────────────── */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
