@@ -1,46 +1,36 @@
 /**
- * EcoLink Australia — AI Ensemble Classifier (OpenRouter)
+ * EcoLink Australia — AASB S2 / NGER-compliant AI Ensemble Classifier
  *
- * Fans out a transaction description to 3 cheap-but-strong LLMs in parallel
- * via OpenRouter, then aggregates the responses to reduce single-model error:
+ * Fans out a transaction to 3 cheap-but-strong LLMs in parallel via OpenRouter,
+ * then aggregates the responses to reduce single-model error.
  *
  *   ┌──> openai/gpt-4o-mini      ──┐
  *   ├──> google/gemini-2.5-flash ──┼──> aggregate ──> result
  *   └──> deepseek/deepseek-chat  ──┘
  *
- * Aggregation rules:
- *   - category code → majority vote (mode)
+ * AGGREGATION RULES:
+ *   - category code  → majority vote (mode)
  *   - scope (1/2/3)  → majority vote
- *   - kg CO2e        → median (ignores a single hallucinated outlier)
- *   - confidence     → 70% from agreement rate + 30% from mean self-reported
+ *   - activity_value → median (ignores a single hallucinated outlier)
+ *   - confidence     → 70% from agreement rate + 30% from mean self-rating
  *
- * The route layer should fall back to this only when the keyword classifier
- * fails or returns confidence < AUTO_THRESHOLD, since each call costs money.
+ * COMPLIANCE GATES:
+ *   The prompt enforces user spec for AASB S2:
+ *     - Activity-based ONLY (no AUD spend factors)
+ *     - State REQUIRED for Scope 2 electricity
+ *     - GHG Protocol Cat 6 vs Cat 4 split (Uber → Cat 6, courier → Cat 4)
+ *     - Reporting period validation (caller passes period_start/end)
+ *     - Personal expense exclusion
  *
- * Required env: OPENROUTER_API_KEY
- * Optional env: OPENROUTER_MODELS  (comma-separated override of MODELS)
- *
- * Cost @ 2025-04 OpenRouter pricing (~500 in / 100 out tokens per call):
- *   ~US$ 0.00015 per transaction across all 3 models
- *   ~US$ 1.50 per 10,000 transactions
+ * The route layer should fall back to this only when keyword classifier fails
+ * or returns confidence < AUTO_THRESHOLD, since each call costs money.
  */
 
 import OpenAI from "openai";
-import { RULES } from "./classifier";
+import { VALID_CATEGORY_CODES } from "./classifier";
 
-// ── Allowed values come from the keyword classifier rules ────────────────
-// This guarantees the AI returns codes that exist in emission_categories.
-const VALID_CATEGORIES = Array.from(new Set(RULES.map((r) => r.category)));
-const CATEGORIES_LIST = VALID_CATEGORIES.join(" | ");
-
-// Approximate kg CO2e per AUD spend, by category — used as a sanity bound
-// so we can clamp wildly hallucinated emission numbers.
-const KG_PER_AUD_BOUNDS: Record<string, { min: number; max: number }> = {};
-for (const r of RULES) {
-  // crude upper bound: assume cheapest reasonable price → highest physical qty
-  const max = (r.kgCo2ePerUnit / r.pricePerUnit) * 3;
-  KG_PER_AUD_BOUNDS[r.category] = { min: 0, max: Math.max(max, 0.01) };
-}
+const CATEGORIES_LIST = VALID_CATEGORY_CODES.join(" | ") +
+  " | excluded_personal | excluded_finance";
 
 const DEFAULT_MODELS = [
   "openai/gpt-4o-mini",
@@ -64,127 +54,264 @@ function getClient(): OpenAI {
       "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://claw-agency.vercel.app",
       "X-Title":      "EcoLink Australia",
     },
-    timeout: 20_000,
+    timeout: 25_000,
   });
 }
 
-// ── Types ────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface EnsembleInput {
+  description:        string;
+  amount_aud:         number;
+  transaction_date:   string;        // ISO date
+  /** FY period for the report — transactions outside this range get excluded */
+  reporting_period_start: string;    // ISO date
+  reporting_period_end:   string;    // ISO date
+  /** Australian state where the company operates — used for Scope 2 electricity */
+  company_state?:     "NSW"|"VIC"|"QLD"|"WA"|"SA"|"TAS"|"ACT"|"NT";
+}
 
 export interface SingleClassification {
-  category:   string;            // emission_categories.code
-  scope:      1 | 2 | 3;
-  kg_co2e:    number;            // estimated emissions
-  confidence: number;            // self-reported 0..1
+  category:           string;        // emission_categories.code
+  scope:              1 | 2 | 3;
+  ghg_category_num:   number | null; // 1-15 for Scope 3, null for 1/2
+  activity_value:     number | null; // physical quantity (L, kWh, km, etc.)
+  activity_unit:      string;        // "L" | "kWh" | "GJ" | "passenger_km" | "vehicle_km" | "tonne_km" | "kg" | "tonne" | "none"
+  electricity_state:  string | null; // NSW/VIC/... only for Scope 2
+  confidence:         number;        // 0..1
+  excluded:           boolean;
+  exclusion_reason:   string | null; // 'personal_expense' | 'outside_reporting_period' | 'not_emission_relevant' | null
+  flags:              string[];      // ['no_activity_data','state_required','low_confidence', ...]
 }
 
 export interface EnsembleResult {
-  category:     string;
-  scope:        1 | 2 | 3;
-  kg_co2e:      number;
-  confidence:   number;
-  needs_review: boolean;         // true when models disagreed or low confidence
-  models_used:  number;          // how many of the 3 succeeded
-  raw:          SingleClassification[]; // for audit / debug
+  category:           string;
+  scope:              1 | 2 | 3;
+  ghg_category_num:   number | null;
+  activity_value:     number | null;
+  activity_unit:      string;
+  electricity_state:  string | null;
+  confidence:         number;
+  excluded:           boolean;
+  exclusion_reason:   string | null;
+  flags:              string[];
+  needs_review:       boolean;
+  models_used:        number;
+  raw:                SingleClassification[];
 }
 
-// ── Prompt ───────────────────────────────────────────────────────────────
+// ─── Prompt ──────────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are an Australian carbon accounting engine. Calculate GHG emissions strictly following NGA Factors 2023–24 (DCCEEW) and GHG Protocol Corporate Standard.
+const SYSTEM_PROMPT = `You are an Australian carbon-accounting classifier for AASB S2 mandatory disclosure
+under NGA Factors 2023-24 (DCCEEW) and the GHG Protocol Corporate Standard.
 
-RULES:
+Your output is used in legal disclosures submitted to ASIC. Errors create regulatory
+risk for our customers. Follow these rules WITHOUT EXCEPTION.
 
-1. METHODOLOGY — Activity-based only. Never use spend-based (AUD) factors.
-   NGA 2023–24 does not publish AUD spend-based factors. All calculations must use
-   physical activity units (litres, kWh, km, passenger-km).
-   If activity data (litres/kWh) is missing, do your best to estimate the physical quantity based on the AUD amount and average prices in Australia, but set confidence to 0.3 or lower.
+═══════════════════════════════════════════════════════════════════════════════
+RULE 1 — METHODOLOGY: Activity-based ONLY
+═══════════════════════════════════════════════════════════════════════════════
+NGA 2023-24 publishes NO AUD spend-based factors. You must extract a physical
+quantity (litres, kWh, GJ, passenger-km, vehicle-km, tonne-km, kg) from the
+description. If you cannot extract one, set activity_value: null and add
+"no_activity_data" to flags. NEVER fabricate a quantity from the AUD amount.
 
-2. SCOPE 1 — Direct combustion (NGA Table 4, Scope 1 only):
-   - Petrol: 2.28 kg CO2e/L
-   - Diesel: 2.70 kg CO2e/L
-   - LPG: 1.54 kg CO2e/L
-   - Natural Gas: 2.06 kg CO2e/m3
-   Formula: litres × factor = kg CO2e
+═══════════════════════════════════════════════════════════════════════════════
+RULE 2 — SCOPE 2 ELECTRICITY: State is MANDATORY
+═══════════════════════════════════════════════════════════════════════════════
+Australian grids vary 5x in carbon intensity (TAS hydro vs VIC brown coal).
+Every Scope 2 electricity transaction MUST have electricity_state set to one
+of: NSW, VIC, QLD, WA, SA, TAS, ACT, NT.
 
-3. SCOPE 2 — Purchased electricity, location-based (NGA Table 6):
-   Apply the factor for the STATE where electricity is consumed:
-   - NSW/ACT: 0.79 kg CO2e/kWh
-   - VIC: 0.98 kg CO2e/kWh
-   - QLD: 0.82 kg CO2e/kWh
-   - SA: 0.51 kg CO2e/kWh
-   - WA: 0.73 kg CO2e/kWh
-   - TAS: 0.21 kg CO2e/kWh
-   - NT: 0.63 kg CO2e/kWh
-   Formula: kWh × state_factor = kg CO2e
-   If state is unknown, use the highest factor (0.98) and set confidence low.
+If the description names a retailer/distributor that operates in only one state
+(e.g. "Energex" → QLD, "Synergy" → WA, "Tasnetworks" → TAS, "Evoenergy" → ACT,
+"Ausgrid" → NSW, "Citipower"/"Powercor"/"Jemena Electricity" → VIC), use that.
+Otherwise fall back to company_state. If neither is available, return:
+  scope: 2, electricity_state: null, flags: ["state_required"]
 
-4. SCOPE 3 — Value chain (GHG Protocol Scope 3 Standard categories):
-   Category mapping (MANDATORY — do not deviate):
-   - Cat. 1: Purchased goods & services (office supplies, groceries for business)
-   - Cat. 3: Fuel & energy upstream (WTT factors from NGA Table 3)
-   - Cat. 4: Upstream transportation of PURCHASED GOODS only (road freight, courier)
-   - Cat. 6: Business travel — ALL of: flights, taxis, Uber, trains, buses, ferries
-   
-   CRITICAL REMAPPING:
-   - Uber / Taxi / Rideshare → ALWAYS Cat. 6 Business Travel (NOT Road Freight)
-   - Train / Bus / Ferry tickets → ALWAYS Cat. 6 Business Travel (NOT Air Travel)
-   - Road Freight (Cat. 4) = courier/freight companies transporting YOUR purchased goods only
-   - Personal expenses (clothing, Netflix personal, non-business meals) → Set confidence to 0
+═══════════════════════════════════════════════════════════════════════════════
+RULE 3 — GHG PROTOCOL CATEGORY MAPPING (CRITICAL)
+═══════════════════════════════════════════════════════════════════════════════
+Cat 6 — Business Travel (passenger transport for staff):
+  - Uber, Didi, Ola, 13cabs, taxi, rideshare         → rideshare_taxi
+  - Train, bus, ferry, tram, Myki, Opal, Go Card     → public_transport
+  - Hertz, Avis, Budget, Thrifty, Europcar, car hire → rental_vehicle
+  - Domestic flights (within Australia)               → air_travel_domestic
+  - International flights                             → air_travel_international
+  - Hotels (Hilton, Marriott, Ibis, Quest, etc)      → accommodation_business
 
-5. ORGANISATIONAL BOUNDARY: Operational control approach.
+Cat 4 — Upstream Transport of GOODS (only):
+  - Auspost Business, Sendle, FedEx, DHL, UPS, TNT, Aramex, StarTrack,
+    Toll, Linfox, Mainfreight, K&S Freighters, Northline → road_freight
+  - DO NOT use road_freight for staff transport — that is Cat 6.
 
-Allowed category codes (return EXACTLY one): ${CATEGORIES_LIST}
+Scope 1 fuels — extract litres from description if possible:
+  - Petrol/ULP/Unleaded → fuel_petrol
+  - Diesel              → fuel_diesel
+  - LPG / Autogas       → fuel_lpg
+  - Natural Gas (GJ)    → natural_gas
+
+Scope 2 — electricity (state required, see Rule 2)        → electricity
+
+Scope 3.5 — Waste (Cleanaway, Suez, Veolia, Remondis)     → waste
+
+═══════════════════════════════════════════════════════════════════════════════
+RULE 4 — EXCLUSIONS (Operational Control Boundary)
+═══════════════════════════════════════════════════════════════════════════════
+Set excluded: true and provide exclusion_reason for:
+  - "personal_expense"           — Netflix personal, Spotify personal, personal
+                                    clothing, personal groceries, non-business meals
+  - "not_emission_relevant"      — bank fees, interest, GST, insurance, rent (no
+                                    direct emission), payroll, software subscriptions
+                                    (treat as Cat 1 only if cloud compute disclosed)
+  - "outside_reporting_period"   — transaction_date is OUTSIDE the FY period
+                                    [reporting_period_start, reporting_period_end]
+                                    given to you. STRICT inequality on both ends.
+
+Excluded transactions still need a category for audit trail — use
+"excluded_personal" or "excluded_finance".
+
+═══════════════════════════════════════════════════════════════════════════════
+RULE 5 — CONFIDENCE
+═══════════════════════════════════════════════════════════════════════════════
+confidence is YOUR self-rated certainty 0..1.
+  - 0.9-1.0  : description names a known retailer/category clearly + activity extracted
+  - 0.7-0.89 : known retailer/category, activity NOT extracted (will need human review)
+  - 0.5-0.69 : ambiguous description with one strong keyword
+  - 0.0-0.49 : description too vague — DO NOT assign a category, return excluded:true
+               with exclusion_reason: "not_emission_relevant"
+
+═══════════════════════════════════════════════════════════════════════════════
+RULE 6 — OUTPUT
+═══════════════════════════════════════════════════════════════════════════════
+Allowed category codes (return EXACTLY one): __CATEGORIES__
 
 Return ONLY this JSON object, no prose, no code fences:
-{ "category": "<one of the allowed codes>", "scope": 1, "kg_co2e": 0.0, "confidence": 0.0 }`;
 
-// ── Single-model call ────────────────────────────────────────────────────
+{
+  "category":           "<one of the allowed codes>",
+  "scope":              1 | 2 | 3,
+  "ghg_category_num":   1-15 | null,
+  "activity_value":     <number> | null,
+  "activity_unit":      "L" | "kWh" | "GJ" | "m3" | "passenger_km" | "vehicle_km" | "tonne_km" | "kg" | "tonne" | "none",
+  "electricity_state":  "NSW"|"VIC"|"QLD"|"WA"|"SA"|"TAS"|"ACT"|"NT" | null,
+  "confidence":         <0..1>,
+  "excluded":           true | false,
+  "exclusion_reason":   "personal_expense" | "outside_reporting_period" | "not_emission_relevant" | null,
+  "flags":              ["no_activity_data" | "state_required" | "low_confidence" | "outside_reporting_period" | "personal_expense"]
+}`.replace("__CATEGORIES__", CATEGORIES_LIST);
+
+// ─── Single-model call ───────────────────────────────────────────────────────
+
+const VALID_CATEGORIES = new Set([...VALID_CATEGORY_CODES, "excluded_personal", "excluded_finance"]);
+const VALID_STATES     = new Set(["NSW","VIC","QLD","WA","SA","TAS","ACT","NT"]);
+const VALID_REASONS    = new Set([null, "personal_expense", "outside_reporting_period", "not_emission_relevant", "duplicate", "manual_review_excluded"]);
 
 async function classifyOne(
   client: OpenAI,
   model: string,
-  description: string,
-  amountAud: number,
+  input: EnsembleInput,
 ): Promise<SingleClassification> {
+  const userMsg = `Description: "${input.description}"
+Amount AUD: ${input.amount_aud.toFixed(2)}
+Transaction date: ${input.transaction_date}
+Reporting period: ${input.reporting_period_start} to ${input.reporting_period_end}
+Company state (fallback for Scope 2): ${input.company_state ?? "UNKNOWN"}`;
+
   const r = await client.chat.completions.create({
     model,
     response_format: { type: "json_object" },
     temperature: 0,
-    max_tokens: 200,
+    max_tokens: 350,
     messages: [
       { role: "system", content: SYSTEM_PROMPT },
-      { role: "user",   content: `Description: "${description}"\nAmount AUD: ${amountAud.toFixed(2)}` },
+      { role: "user",   content: userMsg },
     ],
   });
 
   const raw = r.choices[0]?.message?.content;
   if (!raw) throw new Error(`${model} returned empty content`);
-  const parsed = JSON.parse(raw) as Partial<SingleClassification>;
+  const p = JSON.parse(raw) as Partial<SingleClassification>;
 
-  // Validate + coerce
-  const category = String(parsed.category ?? "").toLowerCase().trim();
-  if (!VALID_CATEGORIES.includes(category)) {
+  // ── Validate + coerce ──────────────────────────────────────────────────
+  const category = String(p.category ?? "").toLowerCase().trim();
+  if (!VALID_CATEGORIES.has(category)) {
     throw new Error(`${model} returned invalid category "${category}"`);
   }
-  const scope = Number(parsed.scope);
+
+  const scope = Number(p.scope);
   if (![1, 2, 3].includes(scope)) {
-    throw new Error(`${model} returned invalid scope "${parsed.scope}"`);
+    throw new Error(`${model} returned invalid scope "${p.scope}"`);
   }
-  const kgRaw = Number(parsed.kg_co2e);
-  const kg = Number.isFinite(kgRaw) && kgRaw >= 0 ? kgRaw : 0;
-  const confidenceRaw = Number(parsed.confidence);
-  const confidence = Number.isFinite(confidenceRaw)
-    ? Math.max(0, Math.min(1, confidenceRaw))
-    : 0.5;
 
-  // Clamp absurd kg values to per-category bound
-  const bound = KG_PER_AUD_BOUNDS[category];
-  const clampedKg =
-    bound && amountAud > 0 ? Math.min(kg, bound.max * amountAud) : kg;
+  const ghgRaw = p.ghg_category_num;
+  const ghg_category_num = (typeof ghgRaw === "number" && ghgRaw >= 1 && ghgRaw <= 15) ? ghgRaw : null;
 
-  return { category, scope: scope as 1 | 2 | 3, kg_co2e: clampedKg, confidence };
+  const avRaw = p.activity_value;
+  const activity_value =
+    typeof avRaw === "number" && Number.isFinite(avRaw) && avRaw >= 0 ? avRaw : null;
+
+  const activity_unit = typeof p.activity_unit === "string" ? p.activity_unit : "none";
+
+  let electricity_state: string | null = null;
+  if (scope === 2) {
+    const s = (p.electricity_state ?? "").toString().toUpperCase();
+    electricity_state = VALID_STATES.has(s) ? s : (input.company_state ?? null);
+  }
+
+  const conf = Number(p.confidence);
+  const confidence = Number.isFinite(conf) ? Math.max(0, Math.min(1, conf)) : 0.5;
+
+  const excluded = p.excluded === true;
+  const reason   = p.exclusion_reason ?? null;
+  const exclusion_reason = VALID_REASONS.has(reason) ? reason : null;
+
+  const flags = Array.isArray(p.flags) ? p.flags.filter((f) => typeof f === "string") : [];
+
+  // ── Server-side enforcement of period rule (cheap insurance) ─────────────
+  const txDate = new Date(input.transaction_date).getTime();
+  const start  = new Date(input.reporting_period_start).getTime();
+  const end    = new Date(input.reporting_period_end).getTime();
+  if (txDate < start || txDate > end) {
+    return {
+      category,
+      scope: scope as 1 | 2 | 3,
+      ghg_category_num,
+      activity_value,
+      activity_unit,
+      electricity_state,
+      confidence,
+      excluded: true,
+      exclusion_reason: "outside_reporting_period",
+      flags: ["outside_reporting_period", ...flags],
+    };
+  }
+
+  // ── Server-side enforcement: missing activity for fuels/electricity ──────
+  if (!excluded && activity_value == null && ["L","kWh","GJ","m3","passenger_km","vehicle_km","tonne_km"].includes(activity_unit)) {
+    flags.push("no_activity_data");
+  }
+
+  // ── Server-side enforcement: Scope 2 without state ───────────────────────
+  if (!excluded && scope === 2 && !electricity_state) {
+    flags.push("state_required");
+  }
+
+  return {
+    category,
+    scope: scope as 1 | 2 | 3,
+    ghg_category_num,
+    activity_value,
+    activity_unit,
+    electricity_state,
+    confidence,
+    excluded,
+    exclusion_reason,
+    flags,
+  };
 }
 
-// ── Aggregation helpers ──────────────────────────────────────────────────
+// ─── Aggregation helpers ─────────────────────────────────────────────────────
 
 function mode<T>(arr: T[]): T {
   const counts = new Map<T, number>();
@@ -193,10 +320,7 @@ function mode<T>(arr: T[]): T {
   for (const v of arr) {
     const n = (counts.get(v) ?? 0) + 1;
     counts.set(v, n);
-    if (n > bestN) {
-      bestN = n;
-      best  = v;
-    }
+    if (n > bestN) { bestN = n; best = v; }
   }
   return best;
 }
@@ -212,27 +336,20 @@ function avg(nums: number[]): number {
   return nums.reduce((s, n) => s + n, 0) / Math.max(nums.length, 1);
 }
 
-// ── Public API ───────────────────────────────────────────────────────────
+// ─── Public API ──────────────────────────────────────────────────────────────
 
 /**
- * Threshold below which a result is flagged needs_review.
- * 0.7 ≈ "at least 2 of 3 models agreed AND average self-confidence is decent".
+ * Threshold for needs_review. 0.7 ≈ at least 2 of 3 models agreed AND
+ * mean self-confidence is decent.
  */
 export const ENSEMBLE_REVIEW_THRESHOLD = 0.70;
 
-/**
- * Classify a single transaction with the 3-model ensemble.
- * Throws only if ALL models fail (caller should fall back to needs_review).
- */
-export async function classifyEnsemble(
-  description: string,
-  amountAud: number,
-): Promise<EnsembleResult> {
+export async function classifyEnsemble(input: EnsembleInput): Promise<EnsembleResult> {
   const client = getClient();
   const models = getModels();
 
   const settled = await Promise.allSettled(
-    models.map((m) => classifyOne(client, m, description, amountAud)),
+    models.map((m) => classifyOne(client, m, input)),
   );
 
   const ok: SingleClassification[] = [];
@@ -246,51 +363,79 @@ export async function classifyEnsemble(
     }
   }
 
-  if (ok.length === 0) {
-    throw new Error("ensemble_all_models_failed");
-  }
+  if (ok.length === 0) throw new Error("ensemble_all_models_failed");
 
-  // 1. majority vote on category + scope (combined as compound key)
+  // ── 1. Majority vote on (category, scope) compound key ──────────────────
   const combos = ok.map((r) => `${r.category}|${r.scope}`);
   const winningCombo = mode(combos);
   const [winCategory, winScopeStr] = winningCombo.split("|");
   const winScope = Number(winScopeStr) as 1 | 2 | 3;
 
-  // 2. median kg_co2e ONLY among models that voted for the winning combo
-  //    (mixing scope-1 and scope-3 numbers wouldn't make sense)
   const winningResults = ok.filter(
     (r) => r.category === winCategory && r.scope === winScope,
   );
-  const winningKg = median(winningResults.map((r) => r.kg_co2e));
 
-  // 3. Confidence: 70% from how many models agreed, 30% from mean self-rating
+  // ── 2. Median activity_value across winning models (only if extracted) ──
+  const activities = winningResults.map((r) => r.activity_value).filter((v): v is number => v != null);
+  const activity_value = activities.length > 0 ? median(activities) : null;
+
+  // ── 3. State — majority vote among winning Scope 2 models ───────────────
+  let electricity_state: string | null = null;
+  if (winScope === 2) {
+    const states = winningResults.map((r) => r.electricity_state).filter((s): s is string => !!s);
+    electricity_state = states.length > 0 ? mode(states) : (input.company_state ?? null);
+  }
+
+  // ── 4. Exclusion — if majority excluded, treat as excluded ──────────────
+  const excludedCount = ok.filter((r) => r.excluded).length;
+  const excluded = excludedCount > ok.length / 2;
+  const exclusion_reason = excluded
+    ? mode(ok.filter((r) => r.excluded).map((r) => r.exclusion_reason ?? "not_emission_relevant"))
+    : null;
+
+  // ── 5. Confidence aggregation ────────────────────────────────────────────
   const agreementRate = winningResults.length / ok.length;
   const meanSelfConf  = avg(winningResults.map((r) => r.confidence));
   const confidence    = 0.70 * agreementRate + 0.30 * meanSelfConf;
 
+  // ── 6. Flags — union of flags from winning models ───────────────────────
+  const flagSet = new Set<string>();
+  for (const r of winningResults) for (const f of r.flags) flagSet.add(f);
+  if (winScope === 2 && !electricity_state)            flagSet.add("state_required");
+  if (activity_value == null && !excluded)             flagSet.add("no_activity_data");
+  if (confidence < ENSEMBLE_REVIEW_THRESHOLD)          flagSet.add("low_confidence");
+
+  // ── 7. ghg_category_num — first non-null among winning ──────────────────
+  const ghg_category_num =
+    winningResults.find((r) => r.ghg_category_num != null)?.ghg_category_num ?? null;
+
+  const activity_unit =
+    winningResults.find((r) => r.activity_unit && r.activity_unit !== "none")?.activity_unit ?? "none";
+
   return {
-    category:     winCategory,
-    scope:        winScope,
-    kg_co2e:      Math.round(winningKg * 1000) / 1000,
-    confidence:   Math.round(confidence * 100) / 100,
-    needs_review: confidence < ENSEMBLE_REVIEW_THRESHOLD,
-    models_used:  ok.length,
-    raw:          ok,
+    category:          winCategory,
+    scope:             winScope,
+    ghg_category_num,
+    activity_value:    activity_value != null ? Math.round(activity_value * 1000) / 1000 : null,
+    activity_unit,
+    electricity_state,
+    confidence:        Math.round(confidence * 100) / 100,
+    excluded,
+    exclusion_reason,
+    flags:             Array.from(flagSet),
+    needs_review:      excluded ? false : (confidence < ENSEMBLE_REVIEW_THRESHOLD || flagSet.size > 0),
+    models_used:       ok.length,
+    raw:               ok,
   };
 }
 
-/**
- * Soft wrapper — returns null instead of throwing, for use in batch loops.
- */
-export async function tryClassifyEnsemble(
-  description: string,
-  amountAud: number,
-): Promise<EnsembleResult | null> {
+/** Soft wrapper — returns null instead of throwing, for batch use. */
+export async function tryClassifyEnsemble(input: EnsembleInput): Promise<EnsembleResult | null> {
   try {
-    return await classifyEnsemble(description, amountAud);
+    return await classifyEnsemble(input);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[ensemble] failed for "${description.slice(0, 40)}":`, msg);
+    console.error(`[ensemble] failed for "${input.description.slice(0, 40)}":`, msg);
     return null;
   }
 }

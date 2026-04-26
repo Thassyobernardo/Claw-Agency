@@ -1,240 +1,333 @@
 /**
- * EcoLink Australia — Automatic Transaction Classifier
+ * EcoLink Australia — Activity-Based Transaction Classifier
  *
- * Maps raw Xero/bank transaction descriptions to emission categories using
- * keyword matching with confidence scoring. Each rule carries:
- *   - keywords: strings to look for (case-insensitive) in the description
- *   - category: the emission_categories.code to assign
- *   - scope: GHG Protocol scope (1 = direct, 2 = electricity, 3 = indirect)
- *   - unit: the physical unit used to calculate kg CO2e
- *   - confidence: base confidence score (0–1). Boosted when multiple keywords match.
+ * AASB S2 / NGER-compliant classification engine. Maps transaction descriptions
+ * to GHG Protocol categories using keyword matching, then attempts to extract
+ * a physical activity quantity (litres, kWh, passenger-km) so emissions are
+ * calculated from real units — NOT from AUD spend.
  *
- * Australian price benchmarks (used to convert AUD spend → physical units):
- *   - Electricity: AUD 0.30 / kWh (avg SME rate, AEMC 2024)
- *   - Diesel:      AUD 2.10 / L   (avg retail, FuelWatch Apr 2024)
- *   - Petrol:      AUD 1.95 / L
- *   - LPG:         AUD 0.85 / L
- *   - Natural gas: AUD 0.033 / MJ (avg commercial, ACCC 2024)
- *   - Air travel:  AUD 0.25 / km  (avg domestic fare per km)
- *   - Road freight: AUD 3.50 / km (avg semi-trailer rate)
+ * RULES (per user spec, August 2026):
  *
- * Emission factors (kg CO2e per unit) from NGA 2023-24 (DCCEEW):
- *   - Electricity (national avg): 0.79 kg CO2e / kWh
- *   - Diesel:                     2.68 kg CO2e / L
- *   - Petrol:                     2.31 kg CO2e / L
- *   - LPG:                        1.51 kg CO2e / L
- *   - Natural gas:                0.0514 kg CO2e / MJ
- *   - Air travel (domestic):      0.255 kg CO2e / km (ICAO method)
- *   - Road freight:               0.113 kg CO2e / tonne-km (assumes 10t avg)
+ *  1. Activity-based ONLY. NGA Factors 2023-24 do not publish AUD spend-based
+ *     factors. If we cannot extract a physical quantity, we return needs_review
+ *     and flag the transaction as missing activity data.
+ *
+ *  2. Scope 2 electricity REQUIRES a state. The caller must supply company.state
+ *     (or per-transaction electricity_state). Without it we return needs_review.
+ *
+ *  3. Cat 6 Business Travel: Uber/taxi/rideshare/train/bus/ferry/flights → Cat 6.
+ *     Cat 4 Upstream Transport: ONLY courier/freight moving purchased goods.
+ *
+ *  4. We DO NOT classify ambiguous spend (groceries, meals, generic services).
+ *     Those go to needs_review with flag "no activity data — supplier disclosure
+ *     required".
+ *
+ * The actual emission_factor values come from the database (emission_factors
+ * table, seeded from NGA Factors 2023-24 Workbook). This file holds only the
+ * keyword → category mapping and the activity-extraction regex helpers.
  */
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 export type Scope = 1 | 2 | 3;
 
+/**
+ * Physical units accepted by NGA Factors 2023-24.
+ * "AUD" is intentionally absent — spend-based is not allowed.
+ */
+export type ActivityUnit =
+  | "L"             // litres (fuel)
+  | "kWh"           // electricity
+  | "GJ"            // natural gas (commercial billing)
+  | "m3"            // natural gas (residential billing)
+  | "passenger_km"  // air, train, bus, ferry
+  | "vehicle_km"    // taxi, rideshare, rental
+  | "tonne_km"      // freight (only when known)
+  | "kg"            // refrigerant top-up
+  | "tonne";        // waste
+
 export interface ClassificationRule {
-  keywords: string[];
-  category: string;         // emission_categories.code
-  scope: Scope;
-  unit: "kWh" | "L_diesel" | "L_petrol" | "L_lpg" | "MJ_gas" | "km_air" | "km_road" | "tonne_waste" | "spend_aud";
-  pricePerUnit: number;     // AUD per physical unit (for spend → unit conversion)
-  kgCo2ePerUnit: number;    // kg CO2e per physical unit
-  confidence: number;       // base confidence 0.0–1.0
+  /** GHG Protocol category code — must exist in emission_categories.code */
+  category:        string;
+  /** GHG Protocol scope */
+  scope:           Scope;
+  /** Cat 1-15 number for Scope 3 (null for Scope 1/2) */
+  ghgCategoryNum:  number | null;
+  /** Physical unit required for activity-based calc */
+  unit:            ActivityUnit;
+  /** Whether this category requires state for the location-based factor */
+  requiresState:   boolean;
+  /** Lowercased keywords matched against transaction description */
+  keywords:        string[];
+  /** Base confidence — boosted by additional keyword hits */
+  baseConfidence:  number;
 }
 
-/** All classification rules, ordered from most specific to most general */
+// ─── Activity quantity extraction ─────────────────────────────────────────────
+// Regex helpers to pull physical quantities out of free-text descriptions.
+
+/** Match "62.5L", "62.5 L", "62L", "62 litres" → returns { value, unit:"L" } */
+function extractLitres(desc: string): number | null {
+  const m = desc.match(/(\d+(?:\.\d+)?)\s*(?:L|l|litres?|liters?)\b/);
+  return m ? parseFloat(m[1]) : null;
+}
+
+/** Match "1,240 kWh", "850 kwh" → returns kWh number */
+function extractKwh(desc: string): number | null {
+  const m = desc.match(/(\d+(?:[,.]?\d+)*(?:\.\d+)?)\s*(?:kWh|kwh|KWH)/);
+  if (!m) return null;
+  return parseFloat(m[1].replace(/,/g, ""));
+}
+
+/** Match "230 km", "1,500km" — for vehicle/passenger distance */
+function extractKm(desc: string): number | null {
+  const m = desc.match(/(\d+(?:[,.]?\d+)*(?:\.\d+)?)\s*km\b/i);
+  if (!m) return null;
+  return parseFloat(m[1].replace(/,/g, ""));
+}
+
+/** Match "500 GJ", "2.5 m³", "2.5 m3" — natural gas */
+function extractGasUnits(desc: string): { value: number; unit: "GJ" | "m3" } | null {
+  const gj = desc.match(/(\d+(?:\.\d+)?)\s*GJ\b/i);
+  if (gj) return { value: parseFloat(gj[1]), unit: "GJ" };
+  const m3 = desc.match(/(\d+(?:\.\d+)?)\s*(?:m³|m3|cubic\s*metre)/i);
+  if (m3) return { value: parseFloat(m3[1]), unit: "m3" };
+  return null;
+}
+
+// ─── Classification rules — keyword → category mapping only ──────────────────
+// IMPORTANT: ordered most specific → most general. First match wins.
+
 export const RULES: ClassificationRule[] = [
-  // ── Scope 2 — Electricity ──────────────────────────────────────────────
+
+  // ═════════════════════════════════════════════════════════════════════════
+  // SCOPE 1 — DIRECT EMISSIONS
+  // ═════════════════════════════════════════════════════════════════════════
+
+  // Petrol — passenger vehicles
   {
-    keywords: ["electricity", "energy", "power", "aurora energy", "agl", "origin energy",
-               "energex", "ergon", "citipower", "powercor", "jemena", "ausgrid",
-               "endeavour energy", "essential energy", "horizon power", "synergy",
-               "united energy", "evoenergy", "actew", "sa power", "sapn",
-               "red energy", "lumo", "simply energy", "momentum energy",
-               "1st energy", "enova", "powerclub", "amber electric"],
-    category: "electricity",
-    scope: 2,
-    unit: "kWh",
-    pricePerUnit: 0.30,
-    kgCo2ePerUnit: 0.79,
-    confidence: 0.90,
+    category: "fuel_petrol", scope: 1, ghgCategoryNum: null,
+    unit: "L", requiresState: false,
+    keywords: [
+      "unleaded","ulp","91 octane","95 octane","98 octane","e10","e85",
+      "premium unleaded","mogas","petrol",
+    ],
+    baseConfidence: 0.85,
   },
 
-  // ── Scope 1 — Diesel / Fleet ───────────────────────────────────────────
+  // Diesel — fleet, generators, equipment
   {
-    keywords: ["diesel", "fuel", "petro", "bp", "shell", "caltex", "ampol",
-               "united petroleum", "liberty oil", "puma energy", "viva energy",
-               "mobil", "7-eleven fuel", "metro petroleum", "flexi fleet",
-               "motorpass", "fuel card", "fleet card", "wex"],
-    category: "fuel_diesel",
-    scope: 1,
-    unit: "L_diesel",
-    pricePerUnit: 2.10,
-    kgCo2ePerUnit: 2.68,
-    confidence: 0.80,
+    category: "fuel_diesel", scope: 1, ghgCategoryNum: null,
+    unit: "L", requiresState: false,
+    keywords: [
+      "diesel","b5 diesel","b20","ulsd","gasoil","fuel card diesel",
+      "wex diesel","motorpass diesel","fleet diesel","truck fuel","semi fuel",
+    ],
+    baseConfidence: 0.85,
   },
 
-  // ── Scope 1 — Petrol ──────────────────────────────────────────────────
+  // LPG / Autogas
   {
-    keywords: ["petrol", "unleaded", "ulp", "premium unleaded", "e10", "e85",
-               "98 octane", "95 octane"],
-    category: "fuel_petrol",
-    scope: 1,
-    unit: "L_petrol",
-    pricePerUnit: 1.95,
-    kgCo2ePerUnit: 2.31,
-    confidence: 0.85,
+    category: "fuel_lpg", scope: 1, ghgCategoryNum: null,
+    unit: "L", requiresState: false,
+    keywords: ["lpg","autogas","liquid petroleum gas","gas bottle","elgas","propane"],
+    baseConfidence: 0.88,
   },
 
-  // ── Scope 1 — LPG ─────────────────────────────────────────────────────
+  // Natural Gas — commercial billing (almost always GJ in AU)
   {
-    keywords: ["lpg", "autogas", "liquid petroleum gas", "gas bottle"],
-    category: "fuel_lpg",
-    scope: 1,
-    unit: "L_lpg",
-    pricePerUnit: 0.85,
-    kgCo2ePerUnit: 1.51,
-    confidence: 0.88,
+    category: "natural_gas", scope: 1, ghgCategoryNum: null,
+    unit: "GJ", requiresState: false,
+    keywords: [
+      "natural gas","gas supply","gas usage","agn","atco gas","jemena gas",
+      "agl gas","origin gas","alinta gas","energy australia gas","gas bill",
+    ],
+    baseConfidence: 0.85,
   },
 
-  // ── Scope 1 — Natural Gas ─────────────────────────────────────────────
+  // Refrigerants — fugitive emissions, NGA Table 7
   {
-    keywords: ["natural gas", "gas supply", "gas usage", "agn", "evoenergy gas",
-               "jemena gas", "atco gas", "simply energy gas", "agl gas",
-               "origin gas", "alinta gas", "gas bill"],
-    category: "natural_gas",
-    scope: 1,
-    unit: "MJ_gas",
-    pricePerUnit: 0.033,
-    kgCo2ePerUnit: 0.0514,
-    confidence: 0.85,
+    category: "refrigerants", scope: 1, ghgCategoryNum: null,
+    unit: "kg", requiresState: false,
+    keywords: [
+      "refrigerant","r-410a","r410a","r-32","r32","r-134a","r134a",
+      "hvac regas","aircon regas","aircon recharge","car aircon regas",
+    ],
+    baseConfidence: 0.82,
   },
 
-  // ── Scope 3 — Air Travel ──────────────────────────────────────────────
+  // ═════════════════════════════════════════════════════════════════════════
+  // SCOPE 2 — PURCHASED ELECTRICITY (state-specific factor REQUIRED)
+  // ═════════════════════════════════════════════════════════════════════════
+
   {
-    keywords: ["qantas", "virgin australia", "jetstar", "rex airline", "bonza",
-               "tigerair", "flight", "airfare", "airline", "aviation",
-               "boarding pass", "air travel", "international air"],
-    category: "air_travel",
-    scope: 3,
-    unit: "km_air",
-    pricePerUnit: 0.25,
-    kgCo2ePerUnit: 0.255,
-    confidence: 0.88,
+    category: "electricity", scope: 2, ghgCategoryNum: null,
+    unit: "kWh", requiresState: true,
+    keywords: [
+      // Retailers
+      "agl electricity","origin electricity","energy australia","energyaustralia",
+      "red energy","lumo energy","simply energy","momentum energy","powershop",
+      "amber electric","alinta electricity","1st energy","powerclub","enova",
+      "globird","kogan energy","tango energy","sumo power","diamond energy",
+      "discover energy","reamped","social energy","nectr","ovo energy",
+
+      // Distributors / network charges
+      "ausgrid","endeavour energy","essential energy","evoenergy",
+      "citipower","powercor","jemena electricity","ausnet electricity","united energy",
+      "energex","ergon energy","sa power networks","sapn","western power",
+      "synergy","horizon power","tasnetworks","aurora energy","power and water",
+
+      // Generic
+      "electricity bill","electricity usage","power bill",
+    ],
+    baseConfidence: 0.90,
   },
 
-  // ── Scope 3 — Road Freight / Logistics ────────────────────────────────
+  // ═════════════════════════════════════════════════════════════════════════
+  // SCOPE 3 — VALUE CHAIN (split by GHG Protocol category)
+  // ═════════════════════════════════════════════════════════════════════════
+
+  // Cat 6 — Air Travel (DOMESTIC) — IATA passenger-km from booking detail
   {
-    keywords: ["toll", "mainfreight", "startrack", "toll group", "linfox",
-               "northline", "k&s freighters", "gibb group", "qube logistics",
-               "sadleirs", "team global", "freight", "courier", "logistics",
-               "delivery", "transport", "auspost business", "dhl", "fedex",
-               "ups", "sendle", "shippit", "fastway", "aramex"],
-    category: "road_freight",
-    scope: 3,
-    unit: "km_road",
-    pricePerUnit: 3.50,
-    kgCo2ePerUnit: 0.113,
-    confidence: 0.72,
+    category: "air_travel_domestic", scope: 3, ghgCategoryNum: 6,
+    unit: "passenger_km", requiresState: false,
+    keywords: [
+      "qantas dom","jetstar dom","virgin australia dom","rex airline","bonza",
+      "qantaslink","qantas group dom","flight syd","flight mel","flight bne",
+      "domestic flight","domestic airfare",
+    ],
+    baseConfidence: 0.78,
   },
 
-  // ── Scope 3 — Waste ───────────────────────────────────────────────────
+  // Cat 6 — Air Travel (INTERNATIONAL)
   {
-    keywords: ["waste", "rubbish", "recycling", "bin", "skip bin", "cleanaway",
-               "suez", "remondis", "veolia", "jj's waste", "j.j's",
-               "council waste", "disposal", "landfill"],
-    category: "waste",
-    scope: 3,
-    unit: "tonne_waste",
-    pricePerUnit: 280,    // AUD per tonne (avg commercial landfill)
-    kgCo2ePerUnit: 467,   // kg CO2e per tonne general waste (NGA 2023-24)
-    confidence: 0.78,
+    category: "air_travel_international", scope: 3, ghgCategoryNum: 6,
+    unit: "passenger_km", requiresState: false,
+    keywords: [
+      "qantas intl","singapore airlines","cathay pacific","emirates","etihad",
+      "qatar airways","united airlines","american airlines","delta","british airways",
+      "air new zealand","fiji airways","air canada","ana","jal","lufthansa",
+      "international flight","international airfare","intl flight",
+    ],
+    baseConfidence: 0.78,
   },
 
-  // ── Scope 3 — Water ───────────────────────────────────────────────────
+  // Cat 6 — Rideshare & Taxi
   {
-    keywords: ["water usage", "water supply", "sydney water", "melbourne water",
-               "sa water", "water corporation wa", "icon water", "unitywater",
-               "seqwater", "coliban water", "wannon water"],
-    category: "water",
-    scope: 3,
-    unit: "spend_aud",
-    pricePerUnit: 1,
-    kgCo2ePerUnit: 0.344,  // kg CO2e per AUD (spend-based, EPA Vic factor)
-    confidence: 0.75,
+    category: "rideshare_taxi", scope: 3, ghgCategoryNum: 6,
+    unit: "vehicle_km", requiresState: false,
+    keywords: [
+      "uber","didi","ola rideshare","13cabs","silver service","cabcharge",
+      "blackcabs","gocatch","shebah","taxi","rideshare","limousine",
+    ],
+    baseConfidence: 0.85,
   },
 
-  // ── Scope 3 — Accommodation / Hotels ──────────────────────────────────
+  // Cat 6 — Public Transport
   {
-    keywords: ["hotel", "motel", "ibis", "novotel", "mercure", "hilton",
-               "marriott", "hyatt", "accor", "quest apartments", "airbnb",
-               "accommodation", "lodging", "serviced apartment"],
-    category: "accommodation",
-    scope: 3,
-    unit: "spend_aud",
-    pricePerUnit: 1,
-    kgCo2ePerUnit: 0.198,  // kg CO2e per AUD (DEFRA spend-based)
-    confidence: 0.70,
+    category: "public_transport", scope: 3, ghgCategoryNum: 6,
+    unit: "passenger_km", requiresState: false,
+    keywords: [
+      "myki","opal card","go card","metrocard","translink","transperth",
+      "metro tasmania","action canberra","sydney trains","metro trains",
+      "v/line","cityrail","train ticket","bus ticket","ferry ticket",
+      "manly fast ferry","sealink","spirit of tasmania",
+    ],
+    baseConfidence: 0.85,
   },
 
-  // ── Scope 3 — Meals / Catering ────────────────────────────────────────
+  // Cat 6 — Rental Vehicle
   {
-    keywords: ["restaurant", "cafe", "catering", "food & bev", "meal",
-               "lunch", "dinner", "breakfast", "mcdonald", "kfc", "subway",
-               "dominos", "pizza", "hungry jacks", "grill'd"],
-    category: "meals_entertainment",
-    scope: 3,
-    unit: "spend_aud",
-    pricePerUnit: 1,
-    kgCo2ePerUnit: 0.262,  // kg CO2e per AUD (food service sector)
-    confidence: 0.65,
+    category: "rental_vehicle", scope: 3, ghgCategoryNum: 6,
+    unit: "vehicle_km", requiresState: false,
+    keywords: [
+      "hertz","avis","budget rent","thrifty","europcar","sixt","alamo",
+      "enterprise rent","redspot","car hire","vehicle hire","ute hire",
+    ],
+    baseConfidence: 0.78,
   },
 
-  // ── Scope 3 — IT / Cloud / Telecoms ───────────────────────────────────
+  // Cat 6 — Business Accommodation (passenger-night)
   {
-    keywords: ["aws", "amazon web services", "google cloud", "azure", "microsoft",
-               "telstra", "optus", "tpg", "iinet", "aussie broadband",
-               "internet", "broadband", "mobile plan", "cloud hosting",
-               "datacentre", "data centre", "hosting"],
-    category: "it_cloud",
-    scope: 3,
-    unit: "spend_aud",
-    pricePerUnit: 1,
-    kgCo2ePerUnit: 0.12,   // kg CO2e per AUD (ICT sector spend-based)
-    confidence: 0.62,
+    category: "accommodation_business", scope: 3, ghgCategoryNum: 6,
+    unit: "passenger_km",  // placeholder — accommodation uses passenger-night, but unit is informational
+    requiresState: false,
+    keywords: [
+      "hilton","marriott","hyatt","accor","ibis","novotel","mercure","sofitel",
+      "intercontinental","crowne plaza","holiday inn","quest apartments",
+      "mantra group","meriton suites","best western","stamford","langham",
+      "hotel","motel","airbnb business","accommodation",
+    ],
+    baseConfidence: 0.65,
   },
 
-  // ── Scope 3 — Office Supplies / Printing ──────────────────────────────
+  // Cat 4 — Upstream Transport of PURCHASED GOODS (couriers/freight only)
   {
-    keywords: ["officeworks", "staples", "cartridge world", "printing",
-               "stationery", "paper", "toner", "ink cartridge"],
-    category: "office_supplies",
-    scope: 3,
-    unit: "spend_aud",
-    pricePerUnit: 1,
-    kgCo2ePerUnit: 0.15,
-    confidence: 0.60,
+    category: "road_freight", scope: 3, ghgCategoryNum: 4,
+    unit: "tonne_km", requiresState: false,
+    keywords: [
+      "auspost business","auspost parcel","sendle","fastway","aramex",
+      "fedex","dhl","ups","tnt express","startrack","couriers please",
+      "toll group","linfox","mainfreight","k&s freighters","kennards transport",
+      "northline","gibb group","qube logistics","freight","goods delivery",
+    ],
+    baseConfidence: 0.70,
+  },
+
+  // Scope 3.5 — Waste
+  {
+    category: "waste", scope: 3, ghgCategoryNum: 5,
+    unit: "tonne", requiresState: false,
+    keywords: [
+      "cleanaway","suez","veolia","remondis","jj's waste","jjs waste",
+      "council waste","skip bin","commercial waste","landfill","recycling collection",
+    ],
+    baseConfidence: 0.78,
   },
 ];
 
+// ─── Result types ────────────────────────────────────────────────────────────
+
+export type ClassificationFlag =
+  | "no_activity_data"
+  | "state_required"
+  | "outside_reporting_period"
+  | "personal_expense"
+  | "low_confidence"
+  | "deprecated_category";
+
 export interface ClassificationResult {
-  category: string;
-  scope: Scope;
-  unit: ClassificationRule["unit"];
-  confidence: number;
-  estimatedPhysicalQty: number;   // converted from AUD spend
-  estimatedKgCo2e: number;
+  category:       string;
+  scope:          Scope;
+  ghgCategoryNum: number | null;
+  unit:           ActivityUnit;
+  requiresState:  boolean;
+  /** Activity quantity extracted from description, or null if not extractable. */
+  activityValue:  number | null;
+  confidence:     number;
   matchedKeywords: string[];
+  /** Diagnostic flags — any present means the transaction needs human review. */
+  flags:          ClassificationFlag[];
 }
 
+// ─── Classify ─────────────────────────────────────────────────────────────────
+
 /**
- * Classify a single transaction description + amount.
+ * Match a transaction description against keyword rules and attempt to extract
+ * the physical activity quantity. Returns null if no rule matches with confidence
+ * above `minConfidence`.
  *
- * Returns the best matching rule, or null if no rule reaches the
- * minimum confidence threshold (0.40).
+ * NOTE: This function does NOT compute kg CO2e. The caller is responsible for:
+ *   1. Looking up the matching emission_factor in the database
+ *      (filtered by category, year=current, and state if requiresState)
+ *   2. Multiplying activityValue × factor.co2e_factor
+ *   3. Persisting electricity_state on the transaction row.
+ *
+ * If `result.activityValue` is null, the transaction MUST go to needs_review.
  */
 export function classify(
   description: string,
-  amountAud: number,
-  minConfidence = 0.40
+  minConfidence = 0.50,
 ): ClassificationResult | null {
   const lower = description.toLowerCase();
 
@@ -246,42 +339,106 @@ export function classify(
     const matched = rule.keywords.filter((kw) => lower.includes(kw.toLowerCase()));
     if (matched.length === 0) continue;
 
-    // Boost confidence based on how many keywords matched
-    const boost = Math.min(0.15, (matched.length - 1) * 0.05);
-    const score = Math.min(1.0, rule.confidence + boost);
+    // Boost confidence based on number of keywords that hit
+    const boost = Math.min(0.10, (matched.length - 1) * 0.04);
+    const score = Math.min(1.0, rule.baseConfidence + boost);
 
     if (score > bestScore) {
-      bestScore = score;
-      bestRule = rule;
+      bestScore   = score;
+      bestRule    = rule;
       bestMatched = matched;
     }
   }
 
   if (!bestRule || bestScore < minConfidence) return null;
 
-  const physicalQty = amountAud / bestRule.pricePerUnit;
-  const kgCo2e = physicalQty * bestRule.kgCo2ePerUnit;
+  // ── Extract activity quantity per unit type ──────────────────────────────
+  let activityValue: number | null = null;
+  switch (bestRule.unit) {
+    case "L":             activityValue = extractLitres(description); break;
+    case "kWh":           activityValue = extractKwh(description); break;
+    case "GJ":
+    case "m3": {
+      const gas = extractGasUnits(description);
+      activityValue = gas?.value ?? null;
+      break;
+    }
+    case "passenger_km":
+    case "vehicle_km":
+    case "tonne_km":      activityValue = extractKm(description); break;
+    // refrigerant kg, waste tonne — typically not in transaction description, manual entry only
+    case "kg":
+    case "tonne":         activityValue = null; break;
+  }
+
+  // ── Diagnostic flags ──────────────────────────────────────────────────────
+  const flags: ClassificationFlag[] = [];
+  if (activityValue == null)        flags.push("no_activity_data");
+  if (bestRule.requiresState)       flags.push("state_required");
+  if (bestScore < 0.75)             flags.push("low_confidence");
 
   return {
-    category: bestRule.category,
-    scope: bestRule.scope,
-    unit: bestRule.unit,
-    confidence: Math.round(bestScore * 100) / 100,
-    estimatedPhysicalQty: Math.round(physicalQty * 100) / 100,
-    estimatedKgCo2e: Math.round(kgCo2e * 1000) / 1000,
+    category:        bestRule.category,
+    scope:           bestRule.scope,
+    ghgCategoryNum:  bestRule.ghgCategoryNum,
+    unit:            bestRule.unit,
+    requiresState:   bestRule.requiresState,
+    activityValue,
+    confidence:      Math.round(bestScore * 100) / 100,
     matchedKeywords: bestMatched,
+    flags,
   };
 }
 
-/**
- * Classify a batch of transactions.
- * Returns one result per transaction (null = unclassified).
- */
-export function classifyBatch(
-  transactions: Array<{ id: string; description: string; amount_aud: number }>
-): Array<{ id: string; result: ClassificationResult | null }> {
+// ─── Personal expense detector ───────────────────────────────────────────────
+// Per user spec: "Personal expenses (clothing, Netflix personal, non-business
+// meals) → EXCLUDE from boundary"
+
+const PERSONAL_KEYWORDS = [
+  "netflix","spotify","disney+","apple music","apple tv","stan",
+  "binge","kayo","amazon prime",
+  "cotton on","kmart personal","target personal","ikea personal",
+  "myer personal","david jones personal",
+  "personal grocery","woolworths personal","coles personal","aldi personal",
+  "personal pharmacy","chemist warehouse personal",
+];
+
+export function detectPersonalExpense(description: string): boolean {
+  const lower = description.toLowerCase();
+  return PERSONAL_KEYWORDS.some((kw) => lower.includes(kw));
+}
+
+// ─── Out-of-period detector ──────────────────────────────────────────────────
+
+export function isOutsideReportingPeriod(
+  txDate: Date | string,
+  periodStart: Date | string,
+  periodEnd:   Date | string,
+): boolean {
+  const t  = new Date(txDate).getTime();
+  const s  = new Date(periodStart).getTime();
+  const e  = new Date(periodEnd).getTime();
+  return t < s || t > e;
+}
+
+// ─── Re-export rules for downstream consumers (e.g. ensemble allowed-list) ───
+export const VALID_CATEGORY_CODES = Array.from(new Set(RULES.map((r) => r.category)));
+
+// ─── Batch helper (kept for backward compatibility with classify route) ─────
+// Returns one result per transaction. Caller still needs to look up emission_factor
+// and compute kg CO2e from activityValue.
+
+export interface BatchInput {
+  id:          string;
+  description: string;
+}
+
+export function classifyBatch(transactions: BatchInput[]): Array<{
+  id:     string;
+  result: ClassificationResult | null;
+}> {
   return transactions.map((tx) => ({
     id: tx.id,
-    result: classify(tx.description, tx.amount_aud),
+    result: classify(tx.description),
   }));
 }

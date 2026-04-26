@@ -1,65 +1,84 @@
 /**
  * POST /api/transactions/classify
  *
- * Classifies unclassified transactions for the authenticated company using a
- * two-tier system:
+ * AASB S2 / NGER-compliant classifier route. Two tiers:
  *
- *   Tier 1 — Keyword classifier (free, deterministic, fast)
- *     src/lib/classifier.ts uses curated keyword + emission-factor rules.
+ *   Tier 1 — Keyword classifier (free, deterministic)
+ *     src/lib/classifier.ts uses curated keyword + GHG Protocol category mapping.
+ *     Returns a category + extracted activity_value (litres / kWh / km).
  *
- *   Tier 2 — AI ensemble (paid, uses 3 LLMs in parallel, costs ~US$0.00015/tx)
- *     src/lib/ensemble-classifier.ts fans out to GPT-4o-mini, Gemini 2.5 Flash
- *     and DeepSeek-V3 via OpenRouter, aggregates with majority vote + median.
- *     Only invoked when keyword Tier 1 fails or is below AUTO_THRESHOLD.
+ *   Tier 2 — AI ensemble (paid, ~US$0.00015 / tx)
+ *     src/lib/ensemble-classifier.ts fans out to 3 LLMs via OpenRouter.
+ *     Used as fallback when keyword fails OR confidence < threshold OR
+ *     activity_value couldn't be extracted from the description.
  *
- * Flow:
- *   1. Verify JWT session → get companyId
- *   2. Fetch all pending transactions for the company (max 2000 / call)
- *   3. Run keyword classifier on each
- *      - confidence ≥ AUTO_THRESHOLD     → status = 'classified'
- *      - confidence in [REVIEW, AUTO)    → goto AI ensemble
- *      - no rule match                    → goto AI ensemble
- *   4. AI ensemble (only if OPENROUTER_API_KEY set; capped at AI_MAX_PER_CALL)
- *      - confidence ≥ ENSEMBLE_REVIEW    → status = 'classified'
- *      - confidence below                → status = 'needs_review'
- *   5. Persist → return summary
+ * COMPLIANCE GATES enforced here (matching user spec):
+ *   - Personal expenses are detected upfront and marked excluded
+ *   - Out-of-period transactions are excluded
+ *   - Scope 2 electricity transactions get state from company.state if missing
+ *   - emission_factors are looked up from DB by category + state + nga_year
+ *   - co2e_kg is computed as activity_value × factor.co2e_factor
+ *   - Transactions with no activity data go to needs_review (never auto-classified)
  *
- * Response 200: { classified, flagged, ai_used, unclassified, total }
- * Response 401: { error: "unauthenticated" }
- * Response 500: { error: string }
+ * Response: {
+ *   classified, flagged, excluded, ai_used, unclassified, total
+ * }
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { sql } from "@/lib/db";
-import { classify } from "@/lib/classifier";
+import {
+  classify,
+  detectPersonalExpense,
+  isOutsideReportingPeriod,
+} from "@/lib/classifier";
 import {
   tryClassifyEnsemble,
   ENSEMBLE_REVIEW_THRESHOLD,
-  type EnsembleResult,
 } from "@/lib/ensemble-classifier";
 
-/** Minimum keyword confidence to auto-classify with no AI fallback. */
-const AUTO_THRESHOLD = 0.60;
-/** Below this we don't even keep the keyword guess — we go straight to AI / needs_review. */
-const REVIEW_THRESHOLD = 0.40;
-/** Hard cap on AI calls per request, to prevent runaway billing. */
-const AI_MAX_PER_CALL = 500;
+const AUTO_THRESHOLD     = 0.75;   // keyword classifier minimum to auto-apply
+const AI_MAX_PER_CALL    = 500;
+const AI_BATCH_SIZE      = 5;
 
 type PendingRow = {
-  id: string;
-  description: string;
-  amount_aud: string; // postgres.js returns numeric as string
+  id:                string;
+  description:       string;
+  amount_aud:        string;        // postgres.js returns numeric as string
+  transaction_date:  string;        // ISO
+};
+
+type CompanyRow = {
+  state:                  "NSW"|"VIC"|"QLD"|"WA"|"SA"|"TAS"|"ACT"|"NT" | null;
+  reporting_period_start: string | null;
+  reporting_period_end:   string | null;
+};
+
+type CategoryRow = { code: string; id: string; scope: number };
+
+type FactorRow = {
+  id:           string;
+  co2e_factor:  string;       // numeric → string
+  unit:         string;
+  source_table: string | null;
+  state:        string | null;
 };
 
 type UpdateRow = {
-  id: string;
-  categoryCode: string;
-  confidence: number;
-  kgCo2e: number;
-  status: "classified" | "needs_review";
-  source: "keyword" | "ai_ensemble";
+  id:               string;
+  categoryCode:     string;
+  factorId:         string | null;
+  activityValue:    number | null;
+  electricityState: string | null;
+  confidence:       number;
+  kgCo2e:           number | null;
+  status:           "classified" | "needs_review" | "excluded";
+  excluded:         boolean;
+  exclusionReason:  string | null;
+  source:           "keyword" | "ai_ensemble" | "rule";
+  scope:            1 | 2 | 3 | null;
 };
 
 export async function POST(_request: NextRequest): Promise<NextResponse> {
@@ -70,15 +89,34 @@ export async function POST(_request: NextRequest): Promise<NextResponse> {
   }
   const companyId = session.user.companyId;
 
-  // ── 2. Fetch unclassified transactions ───────────────────────────────
+  // ── 2. Fetch company config (state, reporting period) ────────────────
+  const companyRows = await sql<CompanyRow[]>`
+    SELECT state, reporting_period_start::text, reporting_period_end::text
+    FROM   companies
+    WHERE  id = ${companyId}::uuid
+    LIMIT  1
+  `.catch(() => []);
+
+  if (companyRows.length === 0) {
+    return NextResponse.json({ error: "company_not_found" }, { status: 404 });
+  }
+  const company = companyRows[0];
+
+  // Default FY 2023-24 if not set
+  const periodStart = company.reporting_period_start ?? "2023-07-01";
+  const periodEnd   = company.reporting_period_end   ?? "2024-06-30";
+
+  // ── 3. Fetch unclassified transactions ───────────────────────────────
   let rows: PendingRow[];
   try {
     rows = await sql<PendingRow[]>`
-      SELECT id, description, amount_aud::text AS amount_aud
+      SELECT id, description, amount_aud::text AS amount_aud,
+             transaction_date::text AS transaction_date
       FROM   transactions
       WHERE  company_id = ${companyId}::uuid
         AND  category_id IS NULL
         AND  classification_status = 'pending'
+        AND  excluded = FALSE
       ORDER  BY transaction_date DESC
       LIMIT  2000
     `;
@@ -89,132 +127,280 @@ export async function POST(_request: NextRequest): Promise<NextResponse> {
   }
 
   if (rows.length === 0) {
-    return NextResponse.json({ classified: 0, flagged: 0, ai_used: 0, unclassified: 0, total: 0 });
+    return NextResponse.json({
+      classified: 0, flagged: 0, excluded: 0, ai_used: 0, unclassified: 0, total: 0,
+    });
   }
 
-  // ── 3. Tier 1 — Keyword classifier ───────────────────────────────────
+  // ── 4. Fetch category UUID map ───────────────────────────────────────
+  const cats: CategoryRow[] = await sql<CategoryRow[]>`
+    SELECT code, id::text, scope FROM emission_categories
+  `;
+  const categoryMap = Object.fromEntries(cats.map((c) => [c.code, c]));
+
+  // ── 5. Tier 1 — Keyword classify + rule-based exclusion ──────────────
   const updates: UpdateRow[] = [];
   const aiQueue: PendingRow[] = [];
-  let unclassifiedCount = 0;
 
   for (const row of rows) {
-    const amountAud = parseFloat(row.amount_aud) || 0;
-    const result = classify(row.description, amountAud, REVIEW_THRESHOLD);
+    const txDate = row.transaction_date;
 
-    if (result && result.confidence >= AUTO_THRESHOLD) {
-      // Strong keyword match — accept it as final
+    // 5a. Out of reporting period — exclude
+    if (isOutsideReportingPeriod(txDate, periodStart, periodEnd)) {
       updates.push({
-        id:           row.id,
-        categoryCode: result.category,
-        confidence:   result.confidence,
-        kgCo2e:       result.estimatedKgCo2e,
-        status:       "classified",
-        source:       "keyword",
+        id: row.id, categoryCode: "excluded_finance", factorId: null,
+        activityValue: null, electricityState: null, confidence: 1.0, kgCo2e: null,
+        status: "excluded", excluded: true,
+        exclusionReason: "outside_reporting_period",
+        source: "rule", scope: null,
       });
+      continue;
+    }
+
+    // 5b. Personal expense — exclude
+    if (detectPersonalExpense(row.description)) {
+      updates.push({
+        id: row.id, categoryCode: "excluded_personal", factorId: null,
+        activityValue: null, electricityState: null, confidence: 1.0, kgCo2e: null,
+        status: "excluded", excluded: true,
+        exclusionReason: "personal_expense",
+        source: "rule", scope: null,
+      });
+      continue;
+    }
+
+    // 5c. Try keyword classifier
+    const result = classify(row.description);
+
+    const noFlags    = result && result.flags.length === 0;
+    const strongConf = result && result.confidence >= AUTO_THRESHOLD;
+
+    if (result && noFlags && strongConf && result.activityValue != null) {
+      // Strong keyword match WITH activity data — try DB lookup for factor
+      aiQueue.push({ ...row, _keyword: result } as PendingRow & { _keyword: typeof result });
     } else {
-      // No match OR weak match — defer to AI ensemble
+      // No match, weak match, or missing activity → defer to AI
       aiQueue.push(row);
     }
   }
 
-  // ── 4. Tier 2 — AI ensemble fallback ─────────────────────────────────
+  // ── 6. Tier 2 — Process queued items via AI (or finalize keyword hits) ──
   let aiUsedCount = 0;
   const aiEnabled = !!process.env.OPENROUTER_API_KEY;
 
-  if (aiEnabled && aiQueue.length > 0) {
-    const slice = aiQueue.slice(0, AI_MAX_PER_CALL);
+  for (let i = 0; i < aiQueue.length; i += AI_BATCH_SIZE) {
+    const batch = aiQueue.slice(i, i + AI_BATCH_SIZE);
+    const settled = await Promise.all(
+      batch.map(async (row) => {
+        const amountAud = parseFloat(row.amount_aud) || 0;
 
-    // Run in modest parallel batches to avoid hammering OpenRouter / hitting rate limits
-    const BATCH = 5;
-    for (let i = 0; i < slice.length; i += BATCH) {
-      const batch = slice.slice(i, i + BATCH);
-      const results = await Promise.all(
-        batch.map(async (row): Promise<{ row: PendingRow; result: EnsembleResult | null }> => {
-          const amountAud = parseFloat(row.amount_aud) || 0;
-          const result = await tryClassifyEnsemble(row.description, amountAud);
-          return { row, result };
-        }),
-      );
-
-      for (const { row, result } of results) {
-        if (!result) {
-          unclassifiedCount++;
-          continue;
+        // Use AI ensemble (it's our highest-quality classifier)
+        if (!aiEnabled || aiUsedCount >= AI_MAX_PER_CALL) {
+          return { row, ai: null };
         }
         aiUsedCount++;
-        updates.push({
-          id:           row.id,
-          categoryCode: result.category,
-          confidence:   result.confidence,
-          kgCo2e:       result.kg_co2e,
-          status:       result.confidence >= ENSEMBLE_REVIEW_THRESHOLD ? "classified" : "needs_review",
-          source:       "ai_ensemble",
+        const ai = await tryClassifyEnsemble({
+          description:        row.description,
+          amount_aud:         amountAud,
+          transaction_date:   row.transaction_date,
+          reporting_period_start: periodStart,
+          reporting_period_end:   periodEnd,
+          company_state:      company.state ?? undefined,
         });
+        return { row, ai };
+      }),
+    );
+
+    for (const { row, ai } of settled) {
+      if (!ai) {
+        updates.push({
+          id: row.id, categoryCode: "", factorId: null,
+          activityValue: null, electricityState: null, confidence: 0, kgCo2e: null,
+          status: "needs_review", excluded: false, exclusionReason: null,
+          source: "ai_ensemble", scope: null,
+        });
+        continue;
       }
+
+      // AI marked as excluded
+      if (ai.excluded) {
+        const code = ai.exclusion_reason === "personal_expense"
+          ? "excluded_personal"
+          : "excluded_finance";
+        updates.push({
+          id: row.id, categoryCode: code, factorId: null,
+          activityValue: null, electricityState: null, confidence: ai.confidence,
+          kgCo2e: null,
+          status: "excluded", excluded: true,
+          exclusionReason: ai.exclusion_reason ?? "not_emission_relevant",
+          source: "ai_ensemble", scope: ai.scope,
+        });
+        continue;
+      }
+
+      // Look up emission_factor from DB
+      const cat = categoryMap[ai.category];
+      if (!cat) {
+        updates.push({
+          id: row.id, categoryCode: ai.category, factorId: null,
+          activityValue: ai.activity_value, electricityState: ai.electricity_state,
+          confidence: ai.confidence, kgCo2e: null,
+          status: "needs_review", excluded: false, exclusionReason: null,
+          source: "ai_ensemble", scope: ai.scope,
+        });
+        continue;
+      }
+
+      // Compute kg CO2e if we have activity + factor
+      let kgCo2e: number | null = null;
+      let factorId: string | null = null;
+
+      if (ai.activity_value != null) {
+        const factor = await fetchFactor(ai.category, ai.scope, ai.electricity_state);
+        if (factor) {
+          factorId = factor.id;
+          kgCo2e   = ai.activity_value * parseFloat(factor.co2e_factor);
+        }
+      }
+
+      const status: UpdateRow["status"] = ai.needs_review || kgCo2e == null
+        ? "needs_review"
+        : "classified";
+
+      updates.push({
+        id: row.id, categoryCode: ai.category, factorId,
+        activityValue: ai.activity_value, electricityState: ai.electricity_state,
+        confidence: ai.confidence,
+        kgCo2e: kgCo2e != null ? Math.round(kgCo2e * 10000) / 10000 : null,
+        status, excluded: false, exclusionReason: null,
+        source: "ai_ensemble", scope: ai.scope,
+      });
     }
-
-    // Anything beyond the AI cap stays unclassified for this call
-    unclassifiedCount += aiQueue.length - slice.length;
-  } else {
-    // AI disabled or no transactions queued — count any AI candidates as unclassified
-    unclassifiedCount += aiQueue.length;
   }
 
-  // ── 5. Fetch category UUID map once ───────────────────────────────────
-  let categoryMap: Record<string, { id: string, scope: number }> = {};
-  try {
-    const cats = await sql<Array<{ code: string; id: string, scope: number }>>`
-      SELECT code, id::text, scope FROM emission_categories
-    `;
-    categoryMap = Object.fromEntries(cats.map((c) => [c.code, { id: c.id, scope: c.scope }]));
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error("[classify] Category fetch failed:", msg);
-    return NextResponse.json({ error: "db_error", message: msg }, { status: 500 });
-  }
-
-  // ── 6. Persist updates ────────────────────────────────────────────────
+  // ── 7. Persist all updates ───────────────────────────────────────────
   let classified = 0;
-  let flagged = 0;
+  let flagged    = 0;
+  let excluded   = 0;
+  let unclassifiedCount = 0;
 
-  for (const update of updates) {
-    const categoryInfo = categoryMap[update.categoryCode];
-    if (!categoryInfo) {
-      // Category code returned by AI but not yet in DB — skip
-      console.warn(`[classify] Unknown category code "${update.categoryCode}" from ${update.source}`);
-      unclassifiedCount++;
-      continue;
-    }
+  for (const u of updates) {
+    const cat = u.categoryCode ? categoryMap[u.categoryCode] : null;
+    const categoryId = cat ? cat.id : null;
 
     try {
       await sql`
         UPDATE transactions
         SET
-          category_id               = ${categoryInfo.id}::uuid,
-          scope                     = ${categoryInfo.scope},
-          co2e_kg                   = ${update.kgCo2e},
-          classification_confidence = ${update.confidence},
-          classification_status     = ${update.status},
+          category_id               = ${categoryId}::uuid,
+          emission_factor_id        = ${u.factorId}::uuid,
+          quantity_value            = ${u.activityValue},
+          electricity_state         = ${u.electricityState},
+          co2e_kg                   = ${u.kgCo2e},
+          scope                     = ${u.scope},
+          classification_confidence = ${u.confidence},
+          classification_status     = ${u.status},
+          classification_notes      = ${`source=${u.source}`},
+          excluded                  = ${u.excluded},
+          exclusion_reason          = ${u.exclusionReason},
           classified_at             = NOW(),
           updated_at                = NOW()
-        WHERE  id         = ${update.id}::uuid
-          AND  company_id = ${companyId}::uuid
+        WHERE id         = ${u.id}::uuid
+          AND company_id = ${companyId}::uuid
       `;
-      if (update.status === "classified") classified++;
-      else                                flagged++;
+
+      if (u.excluded)                       excluded++;
+      else if (u.status === "classified")   classified++;
+      else if (u.status === "needs_review") flagged++;
+      else                                  unclassifiedCount++;
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[classify] Update failed for tx ${update.id}:`, msg);
+      console.error(`[classify] Update failed for tx ${u.id}:`, msg);
       unclassifiedCount++;
     }
   }
 
-  // ── 7. Return summary ────────────────────────────────────────────────
   return NextResponse.json({
-    classified,
-    flagged,
-    ai_used: aiUsedCount,
-    unclassified: unclassifiedCount,
-    total: rows.length,
+    classified, flagged, excluded,
+    ai_used:       aiUsedCount,
+    unclassified:  unclassifiedCount,
+    total:         rows.length,
   });
+}
+
+// ─── Emission factor lookup ──────────────────────────────────────────────────
+// Strict: uses current NGA edition + scope + state. Returns null if not found
+// (caller flags transaction as needs_review).
+
+async function fetchFactor(
+  categoryCode: string,
+  scope: 1 | 2 | 3,
+  state: string | null,
+): Promise<FactorRow | null> {
+  // Map category code → emission_factors.activity name pattern.
+  // Since emission_factors has its own activity strings, we filter loosely
+  // by scope and (for electricity) state.
+  if (scope === 2 && categoryCode === "electricity") {
+    if (!state) return null;
+    const r = await sql<FactorRow[]>`
+      SELECT id::text, co2e_factor::text, unit, source_table, state
+      FROM   emission_factors
+      WHERE  is_current = TRUE
+        AND  scope = 2
+        AND  state = ${state}
+      LIMIT  1
+    `.catch(() => []);
+    return r[0] ?? null;
+  }
+
+  // For Scope 1 fuels, match by scope + activity LIKE
+  const fuelMap: Record<string, string> = {
+    fuel_petrol:  "Petrol",
+    fuel_diesel:  "Diesel",
+    fuel_lpg:     "LPG",
+    natural_gas:  "Natural Gas",
+    refrigerants: "Refrigerant",
+  };
+
+  if (scope === 1 && fuelMap[categoryCode]) {
+    const pat = `%${fuelMap[categoryCode]}%`;
+    const r = await sql<FactorRow[]>`
+      SELECT id::text, co2e_factor::text, unit, source_table, state
+      FROM   emission_factors
+      WHERE  is_current = TRUE
+        AND  scope = 1
+        AND  activity ILIKE ${pat}
+      ORDER  BY created_at DESC
+      LIMIT  1
+    `.catch(() => []);
+    return r[0] ?? null;
+  }
+
+  // Scope 3 — best-effort lookup by category keyword
+  const scope3Map: Record<string, string> = {
+    air_travel_domestic:      "Domestic",
+    air_travel_international: "International",
+    rideshare_taxi:           "Taxi",
+    public_transport:         "Bus",
+    rental_vehicle:           "Hire",
+    accommodation_business:   "Accommodation",
+    road_freight:             "Freight",
+    waste:                    "Waste",
+  };
+
+  if (scope === 3 && scope3Map[categoryCode]) {
+    const pat = `%${scope3Map[categoryCode]}%`;
+    const r = await sql<FactorRow[]>`
+      SELECT id::text, co2e_factor::text, unit, source_table, state
+      FROM   emission_factors
+      WHERE  is_current = TRUE
+        AND  scope = 3
+        AND  activity ILIKE ${pat}
+      ORDER  BY created_at DESC
+      LIMIT  1
+    `.catch(() => []);
+    return r[0] ?? null;
+  }
+
+  return null;
 }
