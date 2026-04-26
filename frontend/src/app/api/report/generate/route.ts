@@ -1,31 +1,123 @@
-import { NextResponse } from "next/server";
+/**
+ * GET /api/report/generate
+ *
+ * AASB S2 Climate-related Disclosure Report generator.
+ *
+ * The output is print-friendly HTML — the user clicks "Save as PDF" or uses
+ * Cmd+P to print to PDF. Designed to satisfy AASB S2 mandatory disclosures:
+ *
+ *   §6-9    Governance
+ *   §10-22  Strategy (incl. scenario analysis)
+ *   §23-25  Risk Management
+ *   §26-42  Metrics & Targets
+ *   §B17    Connectivity to Financial Statements
+ *
+ * Plus AUASB GS 100 assurance disclaimer + NGA Factors 2023-24 emission
+ * factor traceability + GHG Protocol category attribution.
+ *
+ * Data sources:
+ *   - companies                  → entity name, ABN, state, plan, period, assurance
+ *   - company_governance         → AASB S2 §6-25 narrative answers
+ *   - transactions + emission_factors → metrics
+ *
+ * For sections where the customer has NOT yet completed the questionnaire,
+ * we render a clearly-marked "[NOT PROVIDED — complete in Settings]" block
+ * rather than fabricating narrative.
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { sql } from "@/lib/db";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface TxRow {
-  transaction_date: Date;
-  description: string;
-  supplier_name: string | null;
-  amount_aud: number;
-  co2e_kg: number | null;
-  scope: number | null;
-  category: string | null;
-  activity: string | null;
-  unit: string | null;
-  factor_value: number | null;
-  factor_source: string | null;
-}
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface CompanyRow {
-  name: string;
-  abn: string | null;
-  plan: string;
+  name:                     string;
+  abn:                      string | null;
+  state:                    string | null;
+  plan:                     string;
+  reporting_period_start:   string | null;
+  reporting_period_end:     string | null;
+  assurance_status:         "none" | "limited" | "reasonable";
+  assurance_provider:       string | null;
+  assurance_asic_reg:       string | null;
+  assurance_standard:       string | null;
+  assurance_obtained_at:    string | null;
 }
 
-// ─── HTML escape (prevents XSS from DB values injected into the report) ──────
+interface GovernanceRow {
+  board_oversight_body:         string | null;
+  accountable_person_role:      string | null;
+  review_frequency:             string | null;
+  governance_notes:             string | null;
+  physical_risks_identified:    string[] | null;
+  physical_risks_narrative:     string | null;
+  transition_risks_identified:  string[] | null;
+  transition_risks_narrative:   string | null;
+  opportunities_identified:     string[] | null;
+  opportunities_narrative:      string | null;
+  scenario_15c_completed:       boolean;
+  scenario_15c_narrative:       string | null;
+  scenario_2c_completed:        boolean;
+  scenario_2c_narrative:        string | null;
+  scenario_3c_completed:        boolean;
+  scenario_3c_narrative:        string | null;
+  financial_impact_current:     string | null;
+  financial_impact_anticipated: string | null;
+  business_model_resilience:    string | null;
+  risk_identification_process:  string | null;
+  risk_integration_process:     string | null;
+  risk_priority_method:         string | null;
+  target_base_year:             number | null;
+  target_target_year:           number | null;
+  target_reduction_pct:         string | null;
+  target_scope_coverage:        string[] | null;
+  target_methodology:           string | null;
+  target_narrative:             string | null;
+  energy_total_mwh:             string | null;
+  energy_renewable_pct:         string | null;
+  internal_carbon_price_aud:    string | null;
+  exec_remuneration_climate_pct: string | null;
+  fs_consistency_confirmed:     boolean;
+  fs_inconsistencies_narrative: string | null;
+}
 
-function esc(value: string | null | undefined): string {
+interface TxRow {
+  transaction_date:  Date;
+  description:       string;
+  supplier_name:     string | null;
+  amount_aud:        number;
+  co2e_kg:           number | null;
+  scope:             number | null;
+  category_label:    string | null;
+  ghg_cat_num:       number | null;
+  activity_value:    string | null;
+  activity_unit:     string | null;
+  electricity_state: string | null;
+  factor_value:      string | null;
+  factor_source:     string | null;
+}
+
+interface ScopeTotalRow {
+  scope:    number | null;
+  co2e_t:   string;
+  tx_count: number;
+}
+
+interface FactorUsedRow {
+  scope:        number;
+  activity:     string;
+  unit:         string;
+  co2e_factor:  string;
+  state:        string | null;
+  source_table: string | null;
+  tx_count:     number;
+}
+
+// ─── HTML escape ─────────────────────────────────────────────────────────────
+
+function esc(value: string | number | null | undefined): string {
   if (value == null) return "";
   return String(value)
     .replace(/&/g,  "&amp;")
@@ -37,29 +129,62 @@ function esc(value: string | null | undefined): string {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function fmtDate(d: Date) {
-  return new Date(d).toLocaleDateString("en-AU", {
-    day: "2-digit", month: "short", year: "numeric",
-  });
+function fmtDate(d: Date | string) {
+  return new Date(d).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function fmtCo2e(kg: number | null) {
+function fmtPeriod(start: string | null, end: string | null): string {
+  if (!start || !end) return "1 July 2023 – 30 June 2024";
+  return `${fmtDate(start)} – ${fmtDate(end)}`;
+}
+
+function fmtCo2e(kg: number | null): string {
   if (kg == null) return "—";
   if (kg >= 1000) return `${(kg / 1000).toFixed(2)} t`;
   return `${Math.round(kg)} kg`;
 }
 
-function fmtAud(n: number) {
+function fmtAud(n: number): string {
   return new Intl.NumberFormat("en-AU", { style: "currency", currency: "AUD", maximumFractionDigits: 0 }).format(n);
 }
 
-// ─── Fetch all report data ────────────────────────────────────────────────────
+function fmtAbn(abn: string | null): string {
+  if (!abn) return "—";
+  return abn.replace(/(\d{2})(\d{3})(\d{3})(\d{3})/, "$1 $2 $3 $4");
+}
+
+/** Render a narrative field — use [NOT PROVIDED] sentinel if blank. */
+function narr(s: string | null | undefined): string {
+  if (!s || !s.trim()) {
+    return `<span class="not-provided">[NOT PROVIDED — complete in Settings → Climate Governance]</span>`;
+  }
+  return esc(s);
+}
+
+function listOrEmpty(arr: string[] | null): string {
+  if (!arr || arr.length === 0) return narr(null);
+  return `<ul>${arr.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+}
+
+// ─── Fetch all report data ───────────────────────────────────────────────────
 
 async function fetchReportData(companyId: string) {
-  const [companyRows, txRows, totals, efRows, reviewRows, majorityRows] = await Promise.all([
+  const [companyRows, governanceRows, txRows, scopeTotals, factorRows, reviewRow, excludedRow] = await Promise.all([
     sql<CompanyRow[]>`
-      SELECT name, abn, plan FROM companies WHERE id = ${companyId}
+      SELECT name, abn, state, plan,
+             reporting_period_start::text, reporting_period_end::text,
+             assurance_status, assurance_provider, assurance_asic_reg,
+             assurance_standard, assurance_obtained_at::text
+      FROM   companies
+      WHERE  id = ${companyId}::uuid
+      LIMIT  1
     `,
+    sql<GovernanceRow[]>`
+      SELECT *
+      FROM   company_governance
+      WHERE  company_id = ${companyId}::uuid
+      LIMIT  1
+    `.catch(() => [] as GovernanceRow[]),
     sql<TxRow[]>`
       SELECT
         t.transaction_date,
@@ -67,529 +192,585 @@ async function fetchReportData(companyId: string) {
         t.supplier_name,
         t.amount_aud,
         t.co2e_kg,
-        COALESCE(t.scope, ec.scope) AS scope,
-        ec.label AS category,
-        ec.description AS activity,
-        'AUD' AS unit,
-        NULL AS factor_value,
-        'Spend-based Estimate' AS factor_source
+        t.scope,
+        ec.label              AS category_label,
+        NULL                  AS ghg_cat_num,
+        t.quantity_value::text AS activity_value,
+        t.quantity_unit       AS activity_unit,
+        t.electricity_state,
+        ef.co2e_factor::text  AS factor_value,
+        ef.source_table       AS factor_source
       FROM transactions t
       LEFT JOIN emission_categories ec ON t.category_id = ec.id
-      WHERE t.company_id = ${companyId}
+      LEFT JOIN emission_factors    ef ON t.emission_factor_id = ef.id
+      WHERE t.company_id = ${companyId}::uuid
         AND t.classification_status = 'classified'
-      ORDER BY COALESCE(t.scope, ec.scope) ASC NULLS LAST, t.transaction_date ASC
+        AND t.excluded = FALSE
+      ORDER BY t.scope ASC NULLS LAST, t.transaction_date ASC
     `,
-    sql`
+    sql<ScopeTotalRow[]>`
       SELECT
-        COALESCE(t.scope, ec.scope) AS scope,
-        ROUND(SUM(co2e_kg) / 1000, 2) AS co2e_t,
-        COUNT(*) AS tx_count
+        t.scope,
+        ROUND(SUM(t.co2e_kg) / 1000, 3)::text AS co2e_t,
+        COUNT(*)::int AS tx_count
       FROM transactions t
-      LEFT JOIN emission_categories ec ON t.category_id = ec.id
-      WHERE t.company_id = ${companyId}
+      WHERE t.company_id = ${companyId}::uuid
         AND t.classification_status = 'classified'
-      GROUP BY COALESCE(t.scope, ec.scope)
-      ORDER BY COALESCE(t.scope, ec.scope) ASC NULLS LAST
+        AND t.excluded = FALSE
+      GROUP BY t.scope
+      ORDER BY t.scope ASC NULLS LAST
     `,
-    sql`
-      SELECT DISTINCT ec.scope, ec.label AS category, ec.description AS activity, NULL AS co2e_factor, 'AUD' AS unit, 'Spend-based Estimate' AS source_table
-      FROM emission_categories ec
-      INNER JOIN transactions t ON t.category_id = ec.id
-      WHERE t.company_id = ${companyId}
-      ORDER BY ec.label
+    sql<FactorUsedRow[]>`
+      SELECT
+        ef.scope,
+        ef.activity,
+        ef.unit,
+        ef.co2e_factor::text,
+        ef.state,
+        ef.source_table,
+        COUNT(t.id)::int AS tx_count
+      FROM emission_factors ef
+      INNER JOIN transactions t ON t.emission_factor_id = ef.id
+      WHERE t.company_id = ${companyId}::uuid
+        AND t.classification_status = 'classified'
+        AND t.excluded = FALSE
+      GROUP BY ef.scope, ef.activity, ef.unit, ef.co2e_factor, ef.state, ef.source_table
+      ORDER BY ef.scope, ef.activity
     `,
-    sql`
-      SELECT COUNT(*) AS count
+    sql<{ count: string }[]>`
+      SELECT COUNT(*)::text FROM transactions
+      WHERE company_id = ${companyId}::uuid AND classification_status = 'needs_review'
+    `,
+    sql<{ count: string; reason: string | null }[]>`
+      SELECT COUNT(*)::text, exclusion_reason AS reason
       FROM transactions
-      WHERE company_id = ${companyId} AND classification_status = 'needs_review'
-    `,
-    sql`
-      SELECT COUNT(*) AS count
-      FROM transactions
-      WHERE company_id = ${companyId}
-        AND classification_status = 'needs_review'
-        AND category_id IS NOT NULL
+      WHERE company_id = ${companyId}::uuid AND excluded = TRUE
+      GROUP BY exclusion_reason
     `,
   ]);
 
-  const reviewCount  = Number(reviewRows[0]?.count  || 0);
-  const majorityCount = Number(majorityRows[0]?.count || 0);
-  const fullDisagreement = reviewCount - majorityCount;
-
-  return { company: companyRows[0], txRows, totals, efRows, reviewCount, majorityCount, fullDisagreement };
+  return {
+    company:     companyRows[0],
+    governance:  governanceRows[0] ?? null,
+    txRows,
+    scopeTotals,
+    factorRows,
+    reviewCount: Number(reviewRow[0]?.count ?? 0),
+    excluded:    excludedRow,
+  };
 }
 
-// ─── HTML template ────────────────────────────────────────────────────────────
+// ─── HTML template ───────────────────────────────────────────────────────────
 
 function buildHtml(data: Awaited<ReturnType<typeof fetchReportData>>) {
-  const { company, txRows, totals, efRows, reviewCount, majorityCount, fullDisagreement } = data;
+  const { company, governance, txRows, scopeTotals, factorRows, reviewCount, excluded } = data;
 
-  const totalCo2e = totals.reduce((s: number, r: any) => s + Number(r.co2e_t), 0).toFixed(2);
-  const totalTx   = totals.reduce((s: number, r: any) => s + Number(r.tx_count), 0);
-  const byScope   = Object.fromEntries(totals.map((r: any) => [r.scope, r]));
+  const totalCo2eT = scopeTotals.reduce((s, r) => s + Number(r.co2e_t), 0);
+  const totalTx    = scopeTotals.reduce((s, r) => s + Number(r.tx_count), 0);
 
-  const s1 = byScope[1] ?? { co2e_t: 0, tx_count: 0 };
-  const s2 = byScope[2] ?? { co2e_t: 0, tx_count: 0 };
-  const s3 = byScope[3] ?? { co2e_t: 0, tx_count: 0 };
+  const byScope = Object.fromEntries(scopeTotals.map((r) => [r.scope ?? 0, r]));
+  const s1 = byScope[1] ?? { co2e_t: "0", tx_count: 0 };
+  const s2 = byScope[2] ?? { co2e_t: "0", tx_count: 0 };
+  const s3 = byScope[3] ?? { co2e_t: "0", tx_count: 0 };
 
-  const pct = (v: number) => totalCo2e === "0.00" ? 0 : Math.round(Number(v) / Number(totalCo2e) * 100);
+  const txByScope = (n: number) => txRows.filter((t) => t.scope === n);
 
-  const scopeRows = [s1, s2, s3].map((s, i) => ({
-    num: i + 1, ...s,
-    label: ["Direct Emissions", "Purchased Electricity", "Value Chain Emissions"][i],
-    color: ["#2563eb", "#1a7a4a", "#7c3aed"][i],
-  }));
+  // ── Cover meta values ──────────────────────────────────────────────────
+  const safeName   = esc(company.name);
+  const safeAbn    = esc(fmtAbn(company.abn));
+  const safePlan   = esc(company.plan);
+  const period     = fmtPeriod(company.reporting_period_start, company.reporting_period_end);
+  const generated  = new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
 
-  const now     = new Date().toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" });
-  const abn     = company.abn
-    ? company.abn.replace(/(\d{2})(\d{3})(\d{3})(\d{3})/, "$1 $2 $3 $4")
-    : "";
-  const safeCompanyName = esc(company.name);
-  const safeAbn         = esc(abn);
-  const safePlan        = esc(company.plan.charAt(0).toUpperCase() + company.plan.slice(1));
+  // ── Assurance disclaimer ──────────────────────────────────────────────
+  const assuranceBlock = (() => {
+    if (company.assurance_status === "none" || !company.assurance_provider) {
+      return `
+        <div class="callout callout-warn">
+          <h4>⚠ Independent Assurance — NOT OBTAINED</h4>
+          <p>This report has <strong>NOT been subject to independent assurance</strong>.
+          Entities subject to mandatory AASB S2 disclosure (Group 1: revenue ≥ AUD 500m
+          or ≥ 500 employees, FY beginning on/after 1 January 2025) <strong>must</strong>
+          obtain limited assurance from a registered company auditor under
+          <strong>AUASB GS 100 — Assurance Engagements on Sustainability Information</strong>
+          before submission to ASIC.</p>
+          <p style="margin-top:8px;font-size:9pt;color:#92400e">This report is suitable for
+          internal review and benchmarking only.</p>
+        </div>`;
+    }
+    return `
+      <div class="callout callout-ok">
+        <h4>✓ Independent Assurance — ${esc(company.assurance_status === "limited" ? "Limited" : "Reasonable")} Assurance Obtained</h4>
+        <p><strong>Auditor:</strong> ${esc(company.assurance_provider)}<br/>
+        <strong>ASIC Registration:</strong> ${esc(company.assurance_asic_reg ?? "—")}<br/>
+        <strong>Standard:</strong> ${esc(company.assurance_standard ?? "AUASB GS 100")}<br/>
+        <strong>Date Obtained:</strong> ${company.assurance_obtained_at ? fmtDate(company.assurance_obtained_at) : "—"}</p>
+      </div>`;
+  })();
 
-  const txByScope = (scope: number) => txRows.filter((t) => t.scope === scope);
-
+  // ── Transaction table per scope ───────────────────────────────────────
   const txTable = (rows: TxRow[]) =>
     rows.length === 0
-      ? `<p class="none">No classified transactions.</p>`
+      ? `<p class="none">No classified transactions in this scope.</p>`
       : `<table>
           <thead><tr>
             <th>Date</th><th>Description</th><th>Category</th>
-            <th style="text-align:right">Amount</th><th style="text-align:right">CO₂e</th>
+            <th style="text-align:center">Activity</th>
+            <th style="text-align:center">Factor</th>
+            <th style="text-align:right">Amount</th>
+            <th style="text-align:right">CO₂e</th>
           </tr></thead>
           <tbody>
             ${rows.map((t, i) => `
               <tr class="${i % 2 === 0 ? "even" : "odd"}">
                 <td>${fmtDate(t.transaction_date)}</td>
-                <td>${esc(t.description)}${t.supplier_name ? ` <span class="dim">— ${esc(t.supplier_name)}</span>` : ""}</td>
-                <td>${esc(t.category ?? t.activity ?? "—")}</td>
+                <td>${esc(t.description)}${t.supplier_name ? `<br/><span class="dim">${esc(t.supplier_name)}</span>` : ""}</td>
+                <td>${esc(t.category_label ?? "—")}${t.electricity_state ? `<br/><span class="dim">${esc(t.electricity_state)}</span>` : ""}</td>
+                <td style="text-align:center">${t.activity_value != null ? `${Number(t.activity_value).toLocaleString("en-AU")} ${esc(t.activity_unit ?? "")}` : "—"}</td>
+                <td style="text-align:center;font-size:8pt;color:#64748b">${t.factor_value != null ? `${Number(t.factor_value).toFixed(3)}<br/>${esc(t.factor_source ?? "")}` : "—"}</td>
                 <td style="text-align:right">${fmtAud(Number(t.amount_aud))}</td>
-                <td style="text-align:right;font-weight:700">${fmtCo2e(t.co2e_kg !== null ? Number(t.co2e_kg) : null)}</td>
+                <td style="text-align:right;font-weight:700">${fmtCo2e(t.co2e_kg != null ? Number(t.co2e_kg) : null)}</td>
               </tr>`).join("")}
           </tbody>
         </table>`;
+
+  // ── Emission Factors table — ALL factors actually used in this report ───
+  const efTable = factorRows.length === 0
+    ? `<p class="none">No emission factors applied.</p>`
+    : `<table class="ef-table">
+        <thead><tr>
+          <th>Scope</th><th>Activity</th><th>Unit</th><th>State</th>
+          <th style="text-align:right">kg CO₂e/unit</th>
+          <th>Source</th><th style="text-align:right">Used in</th>
+        </tr></thead>
+        <tbody>
+          ${factorRows.map((f, i) => `
+            <tr class="${i % 2 === 0 ? "even" : "odd"}">
+              <td><span class="chip s${f.scope}">Scope ${f.scope}</span></td>
+              <td>${esc(f.activity)}</td>
+              <td>${esc(f.unit)}</td>
+              <td>${esc(f.state ?? "—")}</td>
+              <td style="text-align:right;font-weight:700">${Number(f.co2e_factor).toFixed(4)}</td>
+              <td>NGA 2023-24 ${esc(f.source_table ?? "")}</td>
+              <td style="text-align:right">${f.tx_count} tx</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`;
+
+  // ── Excluded transactions summary ─────────────────────────────────────
+  const excludedSummary = excluded.length === 0
+    ? `<p>No transactions excluded.</p>`
+    : `<ul>${excluded.map((e) => `<li><strong>${e.count}</strong> transaction(s) excluded — reason: <code>${esc(e.reason ?? "unspecified")}</code></li>`).join("")}</ul>`;
+
+  // ── Governance helpers (handle null governance row) ───────────────────
+  const g = governance;
+  const has = (v: string | null | undefined): boolean => !!v && v.trim().length > 0;
 
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<title>${safeName} — AASB S2 Climate Disclosure Report</title>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'Inter', sans-serif; font-size: 10pt; color: #1e293b; background: #f8fafc; }
-  @page { size: A4; margin: 0; } /* Print margin handled by HTML padding to allow full bleed cover */
+  @page { size: A4; margin: 0; }
+
   .page-container { padding: 18mm 18mm 22mm 18mm; background: white; min-height: 100vh; }
-  
-  .cover { height: 100vh; display: flex; flex-direction: column; page-break-after: always; background: linear-gradient(135deg, #020617 0%, #0f172a 100%); color: white; padding: 0; position: relative; overflow: hidden; }
-  .cover::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle at center, rgba(16, 185, 129, 0.15) 0%, transparent 60%); pointer-events: none; }
-  .cover-top { padding: 30px 40px; display: flex; justify-content: space-between; align-items: center; z-index: 10; position: relative; border-bottom: 1px solid rgba(255,255,255,0.05); }
+
+  /* ── COVER ───────────────────────────────────────────────────────── */
+  .cover { height: 100vh; display: flex; flex-direction: column; page-break-after: always;
+           background: linear-gradient(135deg, #020617 0%, #0f172a 100%); color: white; padding: 0; position: relative; overflow: hidden; }
+  .cover::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+                   background: radial-gradient(circle at center, rgba(16, 185, 129, 0.15) 0%, transparent 60%); pointer-events: none; }
+  .cover-top { padding: 30px 40px; display: flex; justify-content: space-between; align-items: center; z-index: 10; position: relative;
+               border-bottom: 1px solid rgba(255,255,255,0.05); }
   .cover-top h1 { font-family: 'Outfit', sans-serif; font-size: 20pt; font-weight: 900; letter-spacing: -0.5px; }
   .cover-top span { font-size: 10pt; color: #34d399; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
-  .cover-body { flex: 1; padding: 60px 50px; display: flex; flex-direction: column; justify-content: center; z-index: 10; position: relative; }
-  .cover-label { font-family: 'Outfit', sans-serif; font-size: 10pt; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; color: #10b981; margin-bottom: 16px; display: inline-block; padding: 6px 12px; background: rgba(16, 185, 129, 0.1); border-radius: 8px; border: 1px solid rgba(16, 185, 129, 0.2); }
-  .cover-title { font-family: 'Outfit', sans-serif; font-size: 42pt; font-weight: 900; line-height: 1.1; color: white; margin-bottom: 12px; text-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-  .cover-rule { width: 80px; height: 4px; background: linear-gradient(90deg, #10b981, #3b82f6); margin: 24px 0; border-radius: 2px; }
-  .cover-meta { display: grid; grid-template-columns: 140px 1fr; gap: 10px 16px; margin-top: 24px; background: rgba(255,255,255,0.03); padding: 24px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); backdrop-filter: blur(10px); }
+  .cover-body { flex: 1; padding: 50px 50px 30px; display: flex; flex-direction: column; justify-content: center; z-index: 10; position: relative; }
+  .cover-label { font-size: 10pt; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; color: #10b981;
+                 margin-bottom: 16px; padding: 6px 12px; background: rgba(16,185,129,0.1); border-radius: 8px;
+                 border: 1px solid rgba(16,185,129,0.2); display: inline-block; align-self: flex-start; }
+  .cover-title { font-family: 'Outfit', sans-serif; font-size: 38pt; font-weight: 900; line-height: 1.1; color: white; margin-bottom: 8px; }
+  .cover-rule { width: 80px; height: 4px; background: linear-gradient(90deg, #10b981, #3b82f6); margin: 16px 0; border-radius: 2px; }
+  .cover-meta { display: grid; grid-template-columns: 160px 1fr; gap: 8px 16px; margin-top: 16px;
+                background: rgba(255,255,255,0.03); padding: 20px; border-radius: 16px;
+                border: 1px solid rgba(255,255,255,0.05); }
   .cover-meta .key { font-size: 9pt; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; }
   .cover-meta .val { font-size: 10pt; color: #f8fafc; font-weight: 500; }
-  .cover-hero { display: flex; align-items: center; gap: 16px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05)); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 20px; padding: 32px 40px; margin-top: 36px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
-  .cover-hero .num { font-family: 'Outfit', sans-serif; font-size: 64pt; font-weight: 900; line-height: 1; color: white; text-shadow: 0 2px 10px rgba(16, 185, 129, 0.3); }
-  .cover-hero .unit { font-family: 'Outfit', sans-serif; font-size: 20pt; color: #34d399; font-weight: 800; }
-  .cover-hero .label { font-size: 11pt; color: #cbd5e1; margin-left: 24px; line-height: 1.5; padding-left: 24px; border-left: 2px solid rgba(255,255,255,0.1); }
-  
-  .ai-badge { margin-top: 24px; display: inline-flex; align-items: flex-start; gap: 12px; padding: 16px 20px; border-radius: 12px; max-width: 600px; }
-  .ai-badge.success { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); color: #a7f3d0; }
-  .ai-badge.warning { background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); color: #fde68a; }
-  .ai-badge svg { flex-shrink: 0; width: 24px; height: 24px; }
-  .ai-badge h4 { font-family: 'Outfit', sans-serif; font-size: 11pt; font-weight: 700; margin-bottom: 4px; color: white; }
-  .ai-badge p { font-size: 9pt; margin: 0; opacity: 0.9; }
+  .cover-hero { display: flex; align-items: center; gap: 16px; background: linear-gradient(135deg, rgba(16, 185, 129, 0.15), rgba(16, 185, 129, 0.05));
+                border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 20px; padding: 24px 32px; margin-top: 20px; }
+  .cover-hero .num { font-family: 'Outfit', sans-serif; font-size: 56pt; font-weight: 900; line-height: 1; color: white; }
+  .cover-hero .unit { font-family: 'Outfit', sans-serif; font-size: 18pt; color: #34d399; font-weight: 800; }
+  .cover-hero .label { font-size: 10pt; color: #cbd5e1; margin-left: 16px; line-height: 1.5; padding-left: 16px; border-left: 2px solid rgba(255,255,255,0.1); }
+  .cover-footer { padding: 16px 40px; border-top: 1px solid rgba(255,255,255,0.05); font-size: 8pt; color: #64748b; background: rgba(0,0,0,0.2); }
 
-  .cover-footer { padding: 24px 50px; border-top: 1px solid rgba(255,255,255,0.05); font-size: 8.5pt; color: #64748b; z-index: 10; position: relative; background: rgba(0,0,0,0.2); }
-  
+  /* ── SECTION HEADERS ─────────────────────────────────────────────── */
   h2 { font-family: 'Outfit', sans-serif; font-size: 22pt; font-weight: 800; color: #0f172a; margin: 0 0 8px; letter-spacing: -0.5px; }
-  .rule { height: 4px; margin: 0 0 20px; border-radius: 2px; }
-  .rule-blue   { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
-  .rule-green  { background: linear-gradient(90deg, #10b981, #34d399); }
+  h3 { font-family: 'Outfit', sans-serif; font-size: 14pt; font-weight: 700; color: #0f172a; margin: 24px 0 10px; }
+  h4 { font-family: 'Outfit', sans-serif; font-size: 11pt; font-weight: 700; color: #1e293b; margin: 16px 0 6px; }
+  p  { font-size: 10pt; line-height: 1.7; margin-bottom: 10px; color: #334155; }
+  ul, ol { padding-left: 22px; margin-bottom: 10px; font-size: 10pt; line-height: 1.7; color: #334155; }
+  li { margin-bottom: 4px; }
+  .rule { height: 4px; margin: 0 0 16px; border-radius: 2px; }
+  .rule-blue { background: linear-gradient(90deg, #3b82f6, #60a5fa); }
+  .rule-green { background: linear-gradient(90deg, #10b981, #34d399); }
   .rule-purple { background: linear-gradient(90deg, #8b5cf6, #a78bfa); }
-  .rule-slate  { background: linear-gradient(90deg, #475569, #94a3b8); }
-  h3 { font-family: 'Outfit', sans-serif; font-size: 13pt; font-weight: 700; color: #0f172a; margin: 28px 0 12px; }
-  p  { font-size: 10pt; line-height: 1.7; margin-bottom: 12px; color: #475569; }
-  .dim { color: #94a3b8; font-size: 8.5pt; font-weight: 500; }
-  
-  .scope-cards { display: flex; gap: 16px; margin: 20px 0; }
-  .scope-card  { flex: 1; border-radius: 16px; padding: 20px; color: white; box-shadow: 0 4px 15px rgba(0,0,0,0.05); position: relative; overflow: hidden; }
-  .scope-card::after { content: ''; position: absolute; top: 0; right: 0; width: 100px; height: 100px; background: rgba(255,255,255,0.1); border-radius: 50%; transform: translate(30%, -30%); }
-  .scope-card .s-label { font-family: 'Outfit', sans-serif; font-size: 8pt; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: 0.9; margin-bottom: 4px; }
-  .scope-card .s-desc  { font-size: 9pt; opacity: 0.8; margin-bottom: 12px; font-weight: 500; }
-  .scope-card .s-val   { font-family: 'Outfit', sans-serif; font-size: 26pt; font-weight: 900; line-height: 1; margin-bottom: 6px; }
-  .scope-card .s-sub   { font-size: 8.5pt; opacity: 0.75; font-weight: 500; }
-  
-  table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 12px 0 20px; font-size: 9pt; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
+  .rule-amber { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+  .rule-slate { background: linear-gradient(90deg, #475569, #94a3b8); }
+  .rule-red { background: linear-gradient(90deg, #ef4444, #f87171); }
+  .dim { color: #94a3b8; font-size: 9pt; }
+  .not-provided { color: #b45309; font-style: italic; background: #fef3c7; padding: 2px 8px; border-radius: 4px; font-size: 9.5pt; font-weight: 600; }
+
+  /* ── SCOPE CARDS ─────────────────────────────────────────────────── */
+  .scope-cards { display: flex; gap: 14px; margin: 16px 0; }
+  .scope-card  { flex: 1; border-radius: 16px; padding: 18px; color: white; position: relative; overflow: hidden; }
+  .scope-card .s-label { font-size: 8pt; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; opacity: 0.9; margin-bottom: 4px; }
+  .scope-card .s-desc { font-size: 9pt; opacity: 0.8; margin-bottom: 10px; }
+  .scope-card .s-val { font-family: 'Outfit', sans-serif; font-size: 24pt; font-weight: 900; line-height: 1; }
+  .scope-card .s-sub { font-size: 8pt; opacity: 0.75; margin-top: 4px; }
+
+  /* ── TABLES ──────────────────────────────────────────────────────── */
+  table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 8px 0 16px; font-size: 9pt;
+          border-radius: 10px; overflow: hidden; border: 1px solid #e2e8f0; }
   thead tr { background: #f8fafc; }
-  th { padding: 12px 16px; text-align: left; font-size: 8pt; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #e2e8f0; }
-  td { padding: 10px 16px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; color: #334155; }
+  th { padding: 10px 12px; text-align: left; font-size: 8pt; font-weight: 700; color: #64748b;
+       text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid #e2e8f0; }
+  td { padding: 8px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; color: #334155; }
   tr:last-child td { border-bottom: none; }
-  tr.even { background: white; }
-  tr.odd  { background: #f8fafc; }
-  
-  .total-row { display: flex; justify-content: space-between; align-items: center; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 12px; padding: 16px 20px; margin: 8px 0 24px; box-shadow: 0 2px 10px rgba(16, 185, 129, 0.05); }
-  .total-row .tl { font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 11pt; color: #064e3b; text-transform: uppercase; letter-spacing: 0.5px; }
-  .total-row .tv { font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 14pt; color: #059669; }
-  
-  .summary-grid { display: grid; grid-template-columns: 200px 1fr; gap: 0; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; font-size: 9.5pt; margin-top: 16px; }
-  .summary-grid .key { background: #f8fafc; padding: 12px 16px; color: #475569; font-weight: 600; border-bottom: 1px solid #e2e8f0; }
-  .summary-grid .val { background: white; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #1e293b; font-weight: 500; }
-  .summary-grid .key:last-of-type, .summary-grid .val:last-of-type { border-bottom: none; }
-  .summary-grid .highlight { background: #f0fdf4; font-weight: 800; color: #059669; font-size: 10.5pt; }
-  
-  .none { color: #94a3b8; font-style: italic; font-size: 10pt; padding: 20px 0; text-align: center; background: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1; margin: 12px 0; }
-  
-  .sig-box { background: linear-gradient(135deg, #f0fdf4, #ecfdf5); border: 1px solid #d1fae5; border-radius: 16px; padding: 24px 32px; margin-top: 32px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.05); }
-  .sig-box .sl { font-family: 'Outfit', sans-serif; font-weight: 900; font-size: 14pt; color: #064e3b; }
-  .sig-box .ss { font-size: 9pt; color: #059669; margin-top: 4px; font-weight: 500; }
-  .sig-box .sr { text-align: right; font-size: 9pt; color: #64748b; }
-  
-  .page-break { page-break-after: always; }
-  .ef-table td, .ef-table th { font-size: 8.5pt; }
-  .chip { display: inline-flex; align-items: center; background: #e2e8f0; color: #475569; border-radius: 6px; padding: 4px 8px; font-size: 7.5pt; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+  tr.odd { background: #f8fafc; }
+
+  .none { color: #94a3b8; font-style: italic; padding: 16px; text-align: center; background: #f8fafc;
+          border-radius: 10px; border: 1px dashed #cbd5e1; }
+
+  /* ── CHIPS / BADGES ──────────────────────────────────────────────── */
+  .chip { display: inline-block; padding: 3px 8px; border-radius: 6px; font-size: 7.5pt; font-weight: 700;
+          letter-spacing: 0.5px; text-transform: uppercase; }
   .chip.s1 { background: #dbeafe; color: #1e40af; }
   .chip.s2 { background: #dcfce7; color: #166534; }
   .chip.s3 { background: #f3e8ff; color: #6b21a8; }
-  
-  .framework-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 9pt; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0; }
-  .framework-table td { padding: 12px 16px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; background: white; color: #334155; }
-  .framework-table tr:last-child td { border-bottom: none; }
-  .framework-table td:nth-child(1) { background: #f8fafc; font-weight: 700; color: #0f172a; width: 120px; }
-  .framework-table td:nth-child(3) { color: #64748b; font-size: 8.5pt; }
-  
-  .limitations { font-size: 9pt; line-height: 1.8; color: #475569; padding-left: 20px; }
-  .limitations li { margin-bottom: 8px; padding-left: 4px; }
-  .limitations li::marker { color: #94a3b8; }
-  
-  .compliance-checklist { font-size: 9pt; background: #f1f5f9; padding: 12px; border-radius: 8px; margin-bottom: 20px; }
-  .compliance-checklist h4 { font-size: 10pt; color: #0f172a; margin-bottom: 8px; }
-  .compliance-checklist ul { list-style: none; padding-left: 0; }
-  .compliance-checklist li { margin-bottom: 4px; display: flex; align-items: flex-start; gap: 8px; }
-  .compliance-checklist li::before { content: '✓'; color: #10b981; font-weight: bold; }
 
-  /* ── Print / PDF ── */
-  .print-btn { position: fixed; bottom: 32px; right: 32px; z-index: 9999; display: flex; align-items: center; gap: 10px; background: linear-gradient(135deg, #10b981, #059669); color: white; font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 11pt; border: none; border-radius: 16px; padding: 14px 24px; cursor: pointer; box-shadow: 0 8px 30px rgba(16,185,129,0.4); transition: transform 0.2s, box-shadow 0.2s; text-decoration: none; }
-  .print-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 40px rgba(16,185,129,0.5); }
-  .print-btn svg { width: 20px; height: 20px; }
+  /* ── CALLOUTS ────────────────────────────────────────────────────── */
+  .callout { padding: 16px 20px; border-radius: 12px; margin: 16px 0; }
+  .callout h4 { margin-top: 0; }
+  .callout-ok   { background: #ecfdf5; border: 1px solid #a7f3d0; color: #065f46; }
+  .callout-warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+  .callout-info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; }
+  .callout-red  { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+
+  /* ── DEFINITION LIST (governance) ────────────────────────────────── */
+  .dl { display: grid; grid-template-columns: 200px 1fr; gap: 8px 16px; margin: 12px 0;
+        border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+  .dl .key { background: #f8fafc; padding: 10px 14px; color: #475569; font-weight: 600;
+             border-bottom: 1px solid #e2e8f0; font-size: 9.5pt; }
+  .dl .val { background: white; padding: 10px 14px; border-bottom: 1px solid #e2e8f0;
+             color: #1e293b; font-size: 9.5pt; line-height: 1.6; }
+  .dl > .key:last-of-type, .dl > .val:last-of-type { border-bottom: none; }
+
+  /* ── PRINT BUTTON ────────────────────────────────────────────────── */
+  .print-btn { position: fixed; bottom: 32px; right: 32px; z-index: 9999; background: linear-gradient(135deg, #10b981, #059669);
+               color: white; font-weight: 800; font-size: 11pt; border: none; border-radius: 16px; padding: 14px 24px;
+               cursor: pointer; box-shadow: 0 8px 30px rgba(16,185,129,0.4); }
   @media print { .print-btn { display: none !important; } }
+
+  .page-break { page-break-after: always; }
+  code { font-family: 'JetBrains Mono', monospace; font-size: 8.5pt; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; color: #334155; }
 </style>
 </head>
 <body>
 
-<!-- FLOATING PDF BUTTON -->
-<button class="print-btn" onclick="window.print()">
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
-  Salvar como PDF
-</button>
+<button class="print-btn" onclick="window.print()">📄 Save as PDF</button>
 
-<!-- COVER PAGE -->
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<!-- COVER                                                                 -->
+<!-- ═════════════════════════════════════════════════════════════════════ -->
 <div class="cover">
   <div class="cover-top">
     <h1>EcoLink<span style="color:#34d399">.</span></h1>
-    <span>Premium Assurance Report</span>
+    <span>AASB S2 Compliant</span>
   </div>
   <div class="cover-body">
-    <div class="cover-label">Climate Disclosure Report</div>
-    <div class="cover-title">${safeCompanyName}</div>
+    <div class="cover-label">Climate-related Financial Disclosure</div>
+    <div class="cover-title">${safeName}</div>
     <div class="cover-rule"></div>
+
     <div class="cover-meta">
-      <span class="key">Reporting Period</span><span class="val">1 July 2023 – 30 June 2024</span>
+      <span class="key">Reporting Period</span><span class="val">${esc(period)}</span>
       <span class="key">ABN</span><span class="val">${safeAbn}</span>
-      <span class="key">Plan</span><span class="val">${safePlan} Plan</span>
-      <span class="key">Generated</span><span class="val">${now}</span>
-      <span class="key">Emission Factors</span><span class="val">NGA Factors 2023–24 (DCCEEW)</span>
-      <span class="key">Framework</span><span class="val">AASB S1 / AASB S2 Climate-related Disclosures</span>
+      <span class="key">Operating State</span><span class="val">${esc(company.state ?? "—")}</span>
+      <span class="key">Frameworks</span><span class="val">AASB S2 · NGA Factors 2023–24 · GHG Protocol Corporate</span>
+      <span class="key">Methodology</span><span class="val">Activity-based · Operational control boundary · Location-based Scope 2</span>
+      <span class="key">GWP Source</span><span class="val">IPCC AR5 · 100-year</span>
+      <span class="key">Generated</span><span class="val">${esc(generated)}</span>
+      <span class="key">EcoLink Plan</span><span class="val">${esc(safePlan)}</span>
     </div>
-    
+
     <div class="cover-hero">
-      <span class="num">${totalCo2e}</span>
+      <span class="num">${totalCo2eT.toFixed(2)}</span>
       <span class="unit">t CO₂e</span>
       <div class="label">
         <strong>Total GHG Emissions</strong><br/>
-        FY 2023–24<br/>
+        Scopes 1, 2 &amp; 3 combined<br/>
         ${totalTx} classified transactions
       </div>
     </div>
-
-    <div class="ai-badge warning" style="margin-bottom: 16px; background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.4);">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-      <div>
-        <h4>AASB S2 Mandatory Disclosure Notice</h4>
-        <p>This report has <strong>NOT been subject to independent assurance</strong>. Entities subject to mandatory AASB S2 disclosure must obtain limited assurance from a registered company auditor under AUASB GS 100.</p>
-      </div>
-    </div>
-
-    ${reviewCount === 0 
-      ? `
-      <div class="ai-badge success">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-        <div>
-          <h4>Relatório Confiável — Consenso Total das 3 IAs</h4>
-          <p>Os dados foram analisados e certificados por GPT-4o, Gemini 2.5 e DeepSeek atuando em paralelo. Não foram detectadas divergências na classificação.</p>
-        </div>
-      </div>
-      `
-      : `
-      <div class="ai-badge warning">
-        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-        <div>
-          <h4>Aviso: Divergência Detectada — ${reviewCount} Transações Aguardam Revisão</h4>
-          <p style="margin-bottom:10px">As 3 IAs (GPT-4o, Gemini 2.5 e DeepSeek) identificaram inconsistências em <strong>${reviewCount}</strong> transações. Detalhamento:</p>
-          <div style="display:flex;gap:16px;flex-wrap:wrap">
-            <div style="background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);border-radius:10px;padding:10px 16px;min-width:140px">
-              <div style="font-family:'Outfit',sans-serif;font-size:22pt;font-weight:900;color:white;line-height:1">${majorityCount}</div>
-              <div style="font-size:8.5pt;opacity:0.85;margin-top:4px">✅ 2/3 IAs em consenso<br/>(categoria detectada,<br/>valor divergente)</div>
-            </div>
-            <div style="background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.4);border-radius:10px;padding:10px 16px;min-width:140px">
-              <div style="font-family:'Outfit',sans-serif;font-size:22pt;font-weight:900;color:white;line-height:1">${fullDisagreement}</div>
-              <div style="font-size:8.5pt;opacity:0.85;margin-top:4px">❌ Desacordo total<br/>(classificação<br/>ambígua)</div>
-            </div>
-          </div>
-        </div>
-      </div>
-      `
-    }
   </div>
   <div class="cover-footer">
-    Prepared by EcoLink Australia in accordance with AASB S2 Climate-related Disclosures &amp;
-    National Greenhouse Accounts Factors 2023–24 (Commonwealth of Australia).<br/>
-    <strong>Assurance level: Not yet obtained.</strong> Effective date note: AASB S2 applies to periods beginning on/after 1 Jan 2025.
+    Prepared with EcoLink Australia · This is a draft until limited assurance is obtained under AUASB GS 100.
   </div>
 </div>
 
-<div class="page-container">
-<!-- SECTION 1: EXECUTIVE SUMMARY -->
-<h2>1. Executive Summary</h2>
-<div class="rule rule-green"></div>
-<p>
-  ${safeCompanyName} (ABN ${safeAbn}) has prepared this climate disclosure report for the financial year
-  ending 30 June 2024. Total greenhouse gas (GHG) emissions for FY 2023–24 are
-  <strong>${totalCo2e} t CO₂e</strong>, calculated across Scope 1, Scope 2, and Scope 3 emission sources
-  using NGA Factors 2023–24 published by the Australian Government Department of Climate Change,
-  Energy, the Environment and Water (DCCEEW).
-</p>
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 1 — EXECUTIVE SUMMARY + ASSURANCE                             -->
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<div class="page-container page-break">
+  <h2>1. Executive Summary</h2>
+  <div class="rule rule-green"></div>
 
-<h3>Emissions by Scope</h3>
-<div class="scope-cards">
-  ${scopeRows.map((s) => `
-    <div class="scope-card" style="background:${s.color}">
-      <div class="s-label">Scope ${s.num}</div>
-      <div class="s-desc">${s.label}</div>
-      <div class="s-val">${Number(s.co2e_t).toFixed(2)} t</div>
-      <div class="s-sub">${pct(Number(s.co2e_t))}% of total · ${s.tx_count} transactions</div>
-    </div>`).join("")}
-</div>
+  <p>This Climate-related Financial Disclosure has been prepared by <strong>${safeName}</strong>
+  in accordance with <strong>AASB S2</strong> (Climate-related Disclosures) and the
+  <strong>National Greenhouse Accounts (NGA) Factors 2023-24</strong> published by the
+  Department of Climate Change, Energy, the Environment and Water (DCCEEW). Calculations
+  follow the <strong>GHG Protocol Corporate Standard</strong>, location-based Scope 2 method,
+  and IPCC AR5 100-year Global Warming Potentials.</p>
 
-<h3>Transaction Summary</h3>
-<div class="summary-grid">
-  <div class="key">Total transactions</div><div class="val">${txRows.length + 4}</div>
-  <div class="key">Classified</div><div class="val">${totalTx}</div>
-  <div class="key">Scope 1 — Direct</div><div class="val">${Number(s1.co2e_t).toFixed(2)} t CO₂e (${pct(Number(s1.co2e_t))}%)</div>
-  <div class="key">Scope 2 — Electricity</div><div class="val">${Number(s2.co2e_t).toFixed(2)} t CO₂e (${pct(Number(s2.co2e_t))}%)</div>
-  <div class="key">Scope 3 — Value Chain</div><div class="val">${Number(s3.co2e_t).toFixed(2)} t CO₂e (${pct(Number(s3.co2e_t))}%)</div>
-  <div class="key highlight">Total emissions</div><div class="val highlight">${totalCo2e} t CO₂e</div>
-</div>
-<div class="page-break"></div>
+  ${assuranceBlock}
 
-<!-- SECTION 2: GOVERNANCE & STRATEGY (AASB S2) -->
-<h2>2. Governance, Strategy & Risk Management (AASB S2)</h2>
-<div class="rule rule-slate"></div>
-<p>
-  Under AASB S2 paragraphs 6–25, entities must disclose how they govern, identify, and manage climate-related risks and opportunities.
-  The following sections outline ${safeCompanyName}'s current baseline posture.
-</p>
-
-<h3>Governance (AASB S2 §6–9)</h3>
-<div class="compliance-checklist">
-  <ul>
-    <li>The Board/management body oversees climate risk identification and sustainability strategy.</li>
-    <li>Climate metrics and transaction data are reviewed periodically via the EcoLink Carbon Accounting platform.</li>
-    <li>Management is directly accountable for ensuring mandatory disclosures are accurate and complete.</li>
-  </ul>
-</div>
-
-<h3>Strategy & Scenario Analysis (AASB S2 §10–22)</h3>
-<p>
-  ${safeCompanyName} is currently establishing a baseline of physical and transition risks.
-  At minimum, scenario analysis considering 1.5°C and 2°C pathways will be required to assess the resilience of the business model.
-</p>
-<div class="compliance-checklist">
-  <ul>
-    <li><strong>Physical Risks:</strong> Assessing operational exposure to extreme heat, flooding, and severe weather events.</li>
-    <li><strong>Transition Risks:</strong> Carbon pricing, regulatory shifts (including AASB S2 mandates), and changing consumer preferences towards low-carbon solutions.</li>
-    <li><strong>Opportunities:</strong> Resource efficiency, adoption of renewable energy (market-based Scope 2), and optimization of Scope 3 supply chains.</li>
-  </ul>
-</div>
-
-<h3>Risk Management (AASB S2 §23–25)</h3>
-<div class="compliance-checklist">
-  <ul>
-    <li>Climate risks are integrated into the overall enterprise risk management framework.</li>
-    <li>The process for identifying climate risks relies on accurate measurement of Scope 1, 2, and 3 emissions as a primary indicator of carbon exposure.</li>
-  </ul>
-</div>
-
-<div class="page-break"></div>
-
-<!-- SECTION 3: METRICS & TARGETS (SCOPE 1) -->
-<h2>3. Metrics: Scope 1 — Direct Emissions</h2>
-<div class="rule rule-blue"></div>
-<p>
-  Scope 1 emissions arise from sources owned or controlled by the organisation.
-  For ${safeCompanyName}, these consist of <strong>mobile and stationary combustion of petrol</strong>
-  in the company vehicle fleet, calculated using the NGA 2023–24 factor for petrol
-  (2.28 kg CO₂e/L, Scope 1 combustion).
-</p>
-<h3>Transaction Detail</h3>
-${txTable(txByScope(1))}
-<div class="total-row">
-  <span class="tl">Total Scope 1 Emissions</span>
-  <span class="tv">${Number(s1.co2e_t).toFixed(2)} t CO₂e</span>
-</div>
-<div class="page-break"></div>
-
-<!-- SECTION 4: METRICS: SCOPE 2 -->
-<h2>4. Metrics: Scope 2 — Purchased Electricity</h2>
-<div class="rule rule-green"></div>
-<p>
-  Scope 2 emissions are indirect GHG emissions from the consumption of purchased electricity.
-  Emissions are calculated using the <strong>location-based method</strong> with state-specific
-  NGA 2023–24 grid emission factors (DCCEEW).
-</p>
-<h3>Transaction Detail</h3>
-${txTable(txByScope(2))}
-<div class="total-row">
-  <span class="tl">Total Scope 2 Emissions</span>
-  <span class="tv">${Number(s2.co2e_t).toFixed(2)} t CO₂e</span>
-</div>
-<div class="page-break"></div>
-
-<!-- SECTION 5: METRICS: SCOPE 3 -->
-<h2>5. Metrics: Scope 3 — Value Chain Emissions</h2>
-<div class="rule rule-purple"></div>
-<p>
-  Scope 3 emissions include all indirect GHG emissions outside of Scope 2 that occur in
-  the value chain. As per GHG Protocol mapping applied in EcoLink, all material categories (1 to 15) are actively screened.
-</p>
-<h3>Transaction Detail</h3>
-${txTable(txByScope(3))}
-<div class="total-row">
-  <span class="tl">Total Scope 3 Emissions</span>
-  <span class="tv">${Number(s3.co2e_t).toFixed(2)} t CO₂e</span>
-</div>
-<div class="page-break"></div>
-
-<!-- SECTION 6: EMISSION FACTORS -->
-<h2>6. Emission Factors &amp; Methodology</h2>
-<div class="rule rule-slate"></div>
-<p>
-  All emission factors are sourced from the <strong>NGA Factors 2023–24</strong> (DCCEEW),
-  expressed as kg CO₂e per unit of activity. Global Warming Potentials (GWPs) follow the
-  IPCC Fifth Assessment Report (AR5) 100-year values.
-</p>
-<h3>Emission Factors Applied</h3>
-<table class="ef-table">
-  <thead><tr>
-    <th>Category</th><th>Activity</th><th>Scope</th>
-    <th>Factor</th><th>Unit</th><th>Source</th>
-  </tr></thead>
-  <tbody>
-    ${efRows.map((ef: any, i: number) => `
-      <tr class="${i % 2 === 0 ? "even" : "odd"}">
-        <td>${esc(ef.category ?? "—")}</td>
-        <td>${esc(ef.activity ?? "—")}</td>
-        <td><span class="chip s${esc(String(ef.scope ?? "?"))}">Scope ${esc(String(ef.scope ?? "?"))}</span></td>
-        <td style="text-align:right;font-weight:700">${esc(String(ef.co2e_factor ?? "—"))}</td>
-        <td>${esc(ef.unit ?? "—")}</td>
-        <td style="color:#6b7f93">${esc(ef.source_table ?? "NGA 2023–24")}</td>
-      </tr>`).join("")}
-  </tbody>
-</table>
-<h3>Methodology Notes</h3>
-<ul class="limitations">
-  <li><strong>Organisational boundary:</strong> Operational control approach — all facilities and vehicles under the operational control of the reporting entity are included.</li>
-  <li><strong>Scope 2 method:</strong> Location-based. Market-based accounting (RECs/GreenPower) has not been applied.</li>
-  <li><strong>Scope 3 completeness:</strong> Only categories with available primary data are reported. A full screening assessment is recommended for subsequent years.</li>
-  <li><strong>GWP source:</strong> IPCC AR5, 100-year time horizon, consistent with NGA Factors 2023–24.</li>
-</ul>
-<div class="page-break"></div>
-
-<!-- SECTION 7: ASSURANCE -->
-<h2>7. Assurance &amp; Disclosure Statement</h2>
-<div class="rule rule-slate"></div>
-<p>This report has been prepared in accordance with the following frameworks:</p>
-<table class="framework-table">
-  <tbody>
-    <tr><td><strong>AASB S2</strong></td><td>Climate-related Disclosures</td><td>Australian Accounting Standards Board, effective 1 January 2025</td></tr>
-    <tr><td><strong>AASB S1</strong></td><td>General Requirements for Disclosure of Sustainability-related Financial Information</td><td>AASB, effective 1 January 2025</td></tr>
-    <tr><td><strong>NGA 2023–24</strong></td><td>National Greenhouse Accounts Factors</td><td>DCCEEW, Commonwealth of Australia 2024</td></tr>
-    <tr><td><strong>GHG Protocol</strong></td><td>Corporate Accounting and Reporting Standard</td><td>World Resources Institute / WBCSD, Revised Edition</td></tr>
-  </tbody>
-</table>
-<h3>Limitations</h3>
-<ul class="limitations">
-  <li>This report has <strong>not been subject to independent third-party assurance</strong>. Organisations subject to mandatory AASB S2 disclosure should obtain assurance from a registered auditor.</li>
-  <li>Emission calculations rely on published NGA factors which represent average Australian conditions and may not reflect specific supplier characteristics.</li>
-  <li>GHG accounting involves estimates and inherent uncertainty. EcoLink Australia applies reasonable care in preparation but does not warrant the accuracy of underlying activity data provided by the organisation.</li>
-</ul>
-<div class="sig-box">
-  <div>
-    <div class="sl">EcoLink Australia</div>
-    <div class="ss">Carbon Accounting Platform &nbsp;·&nbsp; ecolink.com.au</div>
+  <h3>Total Emissions by Scope</h3>
+  <div class="scope-cards">
+    <div class="scope-card" style="background:linear-gradient(135deg,#1d4ed8,#3b82f6)">
+      <div class="s-label">Scope 1</div>
+      <div class="s-desc">Direct combustion</div>
+      <div class="s-val">${Number(s1.co2e_t).toFixed(2)}</div>
+      <div class="s-sub">tonnes CO₂e · ${s1.tx_count} transactions</div>
+    </div>
+    <div class="scope-card" style="background:linear-gradient(135deg,#047857,#10b981)">
+      <div class="s-label">Scope 2</div>
+      <div class="s-desc">Purchased electricity</div>
+      <div class="s-val">${Number(s2.co2e_t).toFixed(2)}</div>
+      <div class="s-sub">tonnes CO₂e · ${s2.tx_count} transactions</div>
+    </div>
+    <div class="scope-card" style="background:linear-gradient(135deg,#6d28d9,#8b5cf6)">
+      <div class="s-label">Scope 3</div>
+      <div class="s-desc">Value chain</div>
+      <div class="s-val">${Number(s3.co2e_t).toFixed(2)}</div>
+      <div class="s-sub">tonnes CO₂e · ${s3.tx_count} transactions</div>
+    </div>
   </div>
-  <div class="sr">
-    <div style="font-weight:700;color:#0f1f2e">Date of preparation</div>
-    <div>${now}</div>
+
+  <h3>Data Quality &amp; Coverage</h3>
+  <div class="dl">
+    <span class="key">Classified transactions</span><span class="val">${totalTx}</span>
+    <span class="key">Awaiting human review</span><span class="val">${reviewCount} ${reviewCount > 0 ? `<span class="not-provided">— review before submission</span>` : ""}</span>
+    <span class="key">Excluded</span><span class="val">${excludedSummary}</span>
+    <span class="key">AI ensemble</span><span class="val">3-model majority vote (GPT-4o-mini · Gemini 2.5 Flash · DeepSeek-V3) via OpenRouter</span>
   </div>
 </div>
 
-</div> <!-- end page-container -->
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 2 — GOVERNANCE (AASB S2 §6-9)                                 -->
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<div class="page-container page-break">
+  <h2>2. Governance</h2>
+  <div class="rule rule-blue"></div>
+  <p class="dim">AASB S2 §6-9 — Governance over climate-related risks and opportunities.</p>
+
+  <h3>2.1 Board Oversight</h3>
+  <div class="dl">
+    <span class="key">Body responsible</span><span class="val">${narr(g?.board_oversight_body ?? null)}</span>
+    <span class="key">Accountable role</span><span class="val">${narr(g?.accountable_person_role ?? null)}</span>
+    <span class="key">Review frequency</span><span class="val">${narr(g?.review_frequency ?? null)}</span>
+  </div>
+
+  <h3>2.2 Governance Narrative</h3>
+  <p>${narr(g?.governance_notes ?? null)}</p>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 3 — STRATEGY (AASB S2 §10-22)                                 -->
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<div class="page-container page-break">
+  <h2>3. Strategy</h2>
+  <div class="rule rule-purple"></div>
+  <p class="dim">AASB S2 §10-22 — Climate-related risks, opportunities, and scenario analysis.</p>
+
+  <h3>3.1 Physical Risks Identified</h3>
+  ${listOrEmpty(g?.physical_risks_identified ?? null)}
+  <p>${narr(g?.physical_risks_narrative ?? null)}</p>
+
+  <h3>3.2 Transition Risks Identified</h3>
+  ${listOrEmpty(g?.transition_risks_identified ?? null)}
+  <p>${narr(g?.transition_risks_narrative ?? null)}</p>
+
+  <h3>3.3 Climate-related Opportunities</h3>
+  ${listOrEmpty(g?.opportunities_identified ?? null)}
+  <p>${narr(g?.opportunities_narrative ?? null)}</p>
+
+  <h3>3.4 Scenario Analysis (AASB S2 §22)</h3>
+  <div class="dl">
+    <span class="key">1.5 °C scenario</span>
+    <span class="val">${g?.scenario_15c_completed ? "✓ Completed" : "<span class='not-provided'>Required — not completed</span>"}<br/>${narr(g?.scenario_15c_narrative ?? null)}</span>
+
+    <span class="key">2 °C scenario</span>
+    <span class="val">${g?.scenario_2c_completed ? "✓ Completed" : "<span class='not-provided'>Required — not completed</span>"}<br/>${narr(g?.scenario_2c_narrative ?? null)}</span>
+
+    <span class="key">3 °C disorderly</span>
+    <span class="val">${g?.scenario_3c_completed ? "✓ Completed (optional)" : "<span class='dim'>Optional — not provided</span>"}<br/>${narr(g?.scenario_3c_narrative ?? null)}</span>
+  </div>
+
+  <h3>3.5 Financial Impact</h3>
+  <div class="dl">
+    <span class="key">Current period</span><span class="val">${narr(g?.financial_impact_current ?? null)}</span>
+    <span class="key">Anticipated</span><span class="val">${narr(g?.financial_impact_anticipated ?? null)}</span>
+    <span class="key">Business model resilience</span><span class="val">${narr(g?.business_model_resilience ?? null)}</span>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 4 — RISK MANAGEMENT (AASB S2 §23-25)                          -->
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<div class="page-container page-break">
+  <h2>4. Risk Management</h2>
+  <div class="rule rule-amber"></div>
+  <p class="dim">AASB S2 §23-25 — Identification, assessment and integration of climate-related risks.</p>
+
+  <h3>4.1 Identification Process</h3>
+  <p>${narr(g?.risk_identification_process ?? null)}</p>
+
+  <h3>4.2 Integration Into Overall Risk Management</h3>
+  <p>${narr(g?.risk_integration_process ?? null)}</p>
+
+  <h3>4.3 Prioritisation Method</h3>
+  <p>${narr(g?.risk_priority_method ?? null)}</p>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 5 — METRICS & TARGETS (AASB S2 §26-42)                        -->
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<div class="page-container page-break">
+  <h2>5. Metrics &amp; Targets</h2>
+  <div class="rule rule-green"></div>
+  <p class="dim">AASB S2 §26-42 — Greenhouse gas emissions, cross-industry metrics, and targets.</p>
+
+  <h3>5.1 Scope 1 — Direct Emissions</h3>
+  ${txTable(txByScope(1))}
+
+  <h3>5.2 Scope 2 — Purchased Electricity (Location-based)</h3>
+  ${txTable(txByScope(2))}
+
+  <h3>5.3 Scope 3 — Value Chain Emissions</h3>
+  ${txTable(txByScope(3))}
+
+  <h3>5.4 Cross-industry Metrics (AASB S2 §29)</h3>
+  <div class="dl">
+    <span class="key">Energy consumption</span><span class="val">${g?.energy_total_mwh ? `${Number(g.energy_total_mwh).toLocaleString("en-AU")} MWh` : narr(null)}</span>
+    <span class="key">Renewable energy %</span><span class="val">${g?.energy_renewable_pct != null ? `${Number(g.energy_renewable_pct).toFixed(1)} %` : narr(null)}</span>
+    <span class="key">Internal carbon price</span><span class="val">${g?.internal_carbon_price_aud != null ? `AUD ${Number(g.internal_carbon_price_aud).toFixed(2)} / t CO₂e` : narr(null)}</span>
+    <span class="key">Exec remuneration linked</span><span class="val">${g?.exec_remuneration_climate_pct != null ? `${Number(g.exec_remuneration_climate_pct).toFixed(1)} %` : narr(null)}</span>
+  </div>
+
+  <h3>5.5 Targets</h3>
+  <div class="dl">
+    <span class="key">Base year</span><span class="val">${g?.target_base_year ?? narr(null)}</span>
+    <span class="key">Target year</span><span class="val">${g?.target_target_year ?? narr(null)}</span>
+    <span class="key">Reduction</span><span class="val">${g?.target_reduction_pct != null ? `${Number(g.target_reduction_pct).toFixed(1)} %` : narr(null)}</span>
+    <span class="key">Scopes covered</span><span class="val">${g?.target_scope_coverage?.join(", ") ?? narr(null)}</span>
+    <span class="key">Methodology</span><span class="val">${narr(g?.target_methodology ?? null)}</span>
+    <span class="key">Narrative</span><span class="val">${narr(g?.target_narrative ?? null)}</span>
+  </div>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 6 — EMISSION FACTORS USED                                     -->
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<div class="page-container page-break">
+  <h2>6. Emission Factors Applied</h2>
+  <div class="rule rule-slate"></div>
+  <p class="dim">All factors traceable to NGA Factors 2023-24 (DCCEEW). State-specific factors used for Scope 2 (Table 6).</p>
+  ${efTable}
+
+  <h3>6.1 Methodology Notes</h3>
+  <ul>
+    <li><strong>Activity-based calculation:</strong> co₂e = activity_value × emission_factor. No spend-based estimates were used as primary methodology.</li>
+    <li><strong>Scope 2 method:</strong> Location-based, applying state-specific NGA factors to grid electricity consumption (kWh).</li>
+    <li><strong>Organisational boundary:</strong> Operational control approach (GHG Protocol).</li>
+    <li><strong>GWP source:</strong> IPCC AR5 100-year. Consistent with NGA 2023-24 methodology.</li>
+    <li><strong>Reporting period:</strong> ${esc(period)}.</li>
+  </ul>
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 7 — CONNECTIVITY TO FINANCIAL STATEMENTS (AASB S2 §B17)      -->
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<div class="page-container page-break">
+  <h2>7. Connectivity to Financial Statements</h2>
+  <div class="rule rule-blue"></div>
+  <p class="dim">AASB S2 §B17 — Connection between climate-related disclosures and the Financial Statements.</p>
+
+  <p>${g?.fs_consistency_confirmed
+    ? `<strong>✓ Confirmed.</strong> The data, assumptions, and reporting period in this disclosure are consistent with those used in the entity's Financial Statements for the same reporting period.`
+    : `<span class="not-provided">Consistency with Financial Statements has not yet been confirmed by management — required before submission.</span>`}</p>
+
+  ${g?.fs_inconsistencies_narrative
+    ? `<h3>7.1 Disclosed Inconsistencies</h3><p>${esc(g.fs_inconsistencies_narrative)}</p>`
+    : ""}
+</div>
+
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<!-- SECTION 8 — LIMITATIONS, FLAGS & ASSUMPTIONS                          -->
+<!-- ═════════════════════════════════════════════════════════════════════ -->
+<div class="page-container page-break">
+  <h2>8. Limitations &amp; Assumptions</h2>
+  <div class="rule rule-red"></div>
+
+  <ul>
+    <li><strong>${reviewCount}</strong> transaction(s) currently flagged for human review and excluded from totals above. They must be resolved before final submission to ASIC.</li>
+    <li>Excluded transactions: ${excludedSummary}</li>
+    <li>Where activity data (litres, kWh, passenger-km) was not present in the source system, the transaction was flagged <code>no_activity_data</code> and routed to manual review — no spend-based fallback was applied.</li>
+    <li>Scope 3 categories are reported on a <strong>best-available-data</strong> basis. Categories not yet assessed (Cat 11 Use of Sold Products, Cat 12 End-of-life) are listed as out-of-scope in the next reporting cycle.</li>
+    <li>This report uses the most recent NGA Factors workbook available at generation time (NGA 2023-24, August 2024 publication). Annual factor updates may restate prior-period emissions.</li>
+  </ul>
+
+  <h3>8.1 AUASB GS 100 Disclaimer</h3>
+  <div class="callout callout-warn">
+    <p>${company.assurance_status === "none"
+      ? `This report has <strong>not</strong> been subject to limited or reasonable assurance under AUASB GS 100 — Assurance Engagements on Sustainability Information. Until assurance is obtained, this disclosure is suitable for internal review only and must not be filed under AASB S2 mandatory disclosure rules.`
+      : `Limited assurance was obtained on ${company.assurance_obtained_at ? fmtDate(company.assurance_obtained_at) : "—"} under AUASB GS 100, performed by ${esc(company.assurance_provider ?? "—")} (ASIC reg. ${esc(company.assurance_asic_reg ?? "—")}).`}</p>
+  </div>
+
+  <h3>8.2 Data Provenance</h3>
+  <p class="dim">Source data ingested from Xero / MYOB / CSV imports / manual entry. Each transaction
+  in Sections 5.1-5.3 carries the emission factor reference (NGA Table number) and, for Scope 2,
+  the Australian state whose grid factor was applied. The full source trail is preserved in the
+  EcoLink platform and is available to assurance providers on request.</p>
+</div>
+
 </body>
 </html>`;
 }
 
-// ─── Route handler ────────────────────────────────────────────────────────────
+// ─── Route handler ───────────────────────────────────────────────────────────
 
-export async function GET(request: Request) {
+export async function GET(_request: NextRequest): Promise<NextResponse> {
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.companyId) {
+    return NextResponse.json({ error: "unauthenticated" }, { status: 401 });
+  }
+
   try {
-    // ── Auth: must have a valid session ──────────────────────────────────────
-    const { getServerSession } = await import("next-auth/next");
-    const { authOptions }      = await import("@/lib/auth");
-    const session = await getServerSession(authOptions);
-
-    if (!session?.user?.companyId) {
-      return new NextResponse(null, {
-        status: 302,
-        headers: { Location: "/login?callbackUrl=/api/report/generate" },
-      });
-    }
-
-    // companyId comes ONLY from the verified session — never from query params
-    const companyId = session.user.companyId;
-
-    const data = await fetchReportData(companyId);
+    const data = await fetchReportData(session.user.companyId);
     if (!data.company) {
-      return NextResponse.json({ error: "Company not found" }, { status: 404 });
+      return NextResponse.json({ error: "company_not_found" }, { status: 404 });
     }
-
     const html = buildHtml(data);
-
-    // Return HTML — browser will render/print to PDF via Ctrl+P
     return new NextResponse(html, {
-      headers: {
-        "Content-Type":   "text/html; charset=utf-8",
-        "Cache-Control":  "no-store",
-        "X-Report-Company": data.company.name,
-      },
+      status: 200,
+      headers: { "Content-Type": "text/html; charset=utf-8" },
     });
-  } catch (err) {
-    console.error("[report/generate]", err);
-    return NextResponse.json({ error: "Report generation failed" }, { status: 500 });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[report/generate] failed:", msg);
+    return NextResponse.json({ error: "report_failed", message: msg }, { status: 500 });
   }
 }
