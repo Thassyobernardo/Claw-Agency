@@ -1,28 +1,38 @@
 /**
  * POST /api/transactions/classify
  *
- * AASB S2 / NGER-compliant classifier route. Two tiers:
+ * AASB S2 / NGA Factors 2024-compliant classifier route.
  *
- *   Tier 1 — Keyword classifier (free, deterministic)
- *     src/lib/classifier.ts uses curated keyword + GHG Protocol category mapping.
- *     Returns a category + extracted activity_value (litres / kWh / km).
+ * THREE-TIER PIPELINE (AI ensemble REMOVED — greenwashing risk):
  *
- *   Tier 2 — AI ensemble (paid, ~US$0.00015 / tx)
- *     src/lib/ensemble-classifier.ts fans out to 3 LLMs via OpenRouter.
- *     Used as fallback when keyword fails OR confidence < threshold OR
- *     activity_value couldn't be extracted from the description.
+ *   Tier 0 — Merchant Rules Engine (deterministic, auditable, zero cost)
+ *     Queries `merchant_classification_rules` table.
+ *     Matches known Australian merchants (BP, Origin Energy, Qantas, Uber, etc.)
+ *     Category is rule-assigned → 100% confidence, full audit trail.
+ *     Physical quantity still extracted from description; if absent → needs_review
+ *     with category pre-filled (reviewer adds quantity only, no re-categorisation).
  *
- * COMPLIANCE GATES enforced here (matching user spec):
- *   - Personal expenses are detected upfront and marked excluded
- *   - Out-of-period transactions are excluded
- *   - Scope 2 electricity transactions get state from company.state if missing
- *   - emission_factors are looked up from DB by category + state + nga_year
- *   - co2e_kg is computed as activity_value × factor.co2e_factor
- *   - Transactions with no activity data go to needs_review (never auto-classified)
+ *   Tier 1 — Keyword classifier (src/lib/classifier.ts)
+ *     Curated keyword → GHG Protocol category mapping.
+ *     Extracts physical quantity (litres / kWh / km) from description.
+ *     Strong match (≥0.75) + quantity extracted → classified.
+ *     Weak match or missing quantity → needs_review with category hint.
  *
- * Response: {
- *   classified, flagged, excluded, ai_used, unclassified, total
- * }
+ *   No Tier 2 (AI ensemble removed):
+ *     Transactions not matched by Tier 0 or Tier 1 → needs_review.
+ *     Rationale: AI guesses on unrecognised transactions constitute greenwashing
+ *     if submitted in an AASB S2 / NGA-based carbon report (AUASB guidance).
+ *     The client must manually classify unknown transactions.
+ *
+ * COMPLIANCE GATES:
+ *   - Personal expenses detected and excluded upfront
+ *   - Out-of-period transactions excluded
+ *   - Scope 2 electricity requires state (NGA state-specific grid factors)
+ *   - CO2e = activity_value × NGA factor (never spend-based)
+ *   - Transactions with no activity data → needs_review (never auto-classified)
+ *   - classification_notes records source + rule ID or keyword for audit trail
+ *
+ * Response: { classified, flagged, excluded, rule_matched, keyword_matched, unclassified, total }
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -34,33 +44,29 @@ import {
   detectPersonalExpense,
   isOutsideReportingPeriod,
 } from "@/lib/classifier";
-import {
-  tryClassifyEnsemble,
-  ENSEMBLE_REVIEW_THRESHOLD,
-} from "@/lib/ensemble-classifier";
+import { findMerchantRule } from "@/lib/merchant-rules";
 
-const AUTO_THRESHOLD     = 0.75;   // keyword classifier minimum to auto-apply
-const AI_MAX_PER_CALL    = 500;
-const AI_BATCH_SIZE      = 5;
+const AUTO_THRESHOLD = 0.75; // keyword classifier minimum to auto-classify
 
 type PendingRow = {
-  id:                string;
-  description:       string;
-  amount_aud:        string;        // postgres.js returns numeric as string
-  transaction_date:  string;        // ISO
+  id:               string;
+  description:      string;
+  amount_aud:       string;
+  transaction_date: string;
 };
 
 type CompanyRow = {
-  state:                  "NSW"|"VIC"|"QLD"|"WA"|"SA"|"TAS"|"ACT"|"NT" | null;
+  state:                  "NSW" | "VIC" | "QLD" | "WA" | "SA" | "TAS" | "ACT" | "NT" | null;
   reporting_period_start: string | null;
   reporting_period_end:   string | null;
+  nga_edition_year:       number;
 };
 
 type CategoryRow = { code: string; id: string; scope: number };
 
 type FactorRow = {
   id:           string;
-  co2e_factor:  string;       // numeric → string
+  co2e_factor:  string;
   unit:         string;
   source_table: string | null;
   state:        string | null;
@@ -77,8 +83,9 @@ type UpdateRow = {
   status:           "classified" | "needs_review" | "excluded";
   excluded:         boolean;
   exclusionReason:  string | null;
-  source:           "keyword" | "ai_ensemble" | "rule";
+  source:           "rule" | "keyword" | "unmatched";
   scope:            1 | 2 | 3 | null;
+  classificationNotes: string;
 };
 
 export async function POST(_request: NextRequest): Promise<NextResponse> {
@@ -89,9 +96,12 @@ export async function POST(_request: NextRequest): Promise<NextResponse> {
   }
   const companyId = session.user.companyId;
 
-  // ── 2. Fetch company config (state, reporting period) ────────────────
+  // ── 2. Fetch company config ──────────────────────────────────────────
   const companyRows = await sql<CompanyRow[]>`
-    SELECT state, reporting_period_start::text, reporting_period_end::text
+    SELECT state,
+           reporting_period_start::text,
+           reporting_period_end::text,
+           COALESCE(nga_edition_year, 2024) AS nga_edition_year
     FROM   companies
     WHERE  id = ${companyId}::uuid
     LIMIT  1
@@ -101,8 +111,6 @@ export async function POST(_request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "company_not_found" }, { status: 404 });
   }
   const company = companyRows[0];
-
-  // Default FY 2023-24 if not set
   const periodStart = company.reporting_period_start ?? "2023-07-01";
   const periodEnd   = company.reporting_period_end   ?? "2024-06-30";
 
@@ -113,10 +121,10 @@ export async function POST(_request: NextRequest): Promise<NextResponse> {
       SELECT id, description, amount_aud::text AS amount_aud,
              transaction_date::text AS transaction_date
       FROM   transactions
-      WHERE  company_id = ${companyId}::uuid
-        AND  category_id IS NULL
+      WHERE  company_id        = ${companyId}::uuid
+        AND  category_id       IS NULL
         AND  classification_status = 'pending'
-        AND  excluded = FALSE
+        AND  excluded          = FALSE
       ORDER  BY transaction_date DESC
       LIMIT  2000
     `;
@@ -128,7 +136,8 @@ export async function POST(_request: NextRequest): Promise<NextResponse> {
 
   if (rows.length === 0) {
     return NextResponse.json({
-      classified: 0, flagged: 0, excluded: 0, ai_used: 0, unclassified: 0, total: 0,
+      classified: 0, flagged: 0, excluded: 0,
+      rule_matched: 0, keyword_matched: 0, unclassified: 0, total: 0,
     });
   }
 
@@ -138,155 +147,194 @@ export async function POST(_request: NextRequest): Promise<NextResponse> {
   `;
   const categoryMap = Object.fromEntries(cats.map((c) => [c.code, c]));
 
-  // ── 5. Tier 1 — Keyword classify + rule-based exclusion ──────────────
+  // ── 5. Classification loop ───────────────────────────────────────────
   const updates: UpdateRow[] = [];
-  const aiQueue: PendingRow[] = [];
+  let ruleMatched    = 0;
+  let keywordMatched = 0;
 
   for (const row of rows) {
     const txDate = row.transaction_date;
 
-    // 5a. Out of reporting period — exclude
+    // 5a. Out-of-period → exclude
     if (isOutsideReportingPeriod(txDate, periodStart, periodEnd)) {
       updates.push({
         id: row.id, categoryCode: "excluded_finance", factorId: null,
         activityValue: null, electricityState: null, confidence: 1.0, kgCo2e: null,
-        status: "excluded", excluded: true,
-        exclusionReason: "outside_reporting_period",
+        status: "excluded", excluded: true, exclusionReason: "outside_reporting_period",
         source: "rule", scope: null,
+        classificationNotes: "source=rule:period_exclusion",
       });
       continue;
     }
 
-    // 5b. Personal expense — exclude
+    // 5b. Personal expense → exclude
     if (detectPersonalExpense(row.description)) {
       updates.push({
         id: row.id, categoryCode: "excluded_personal", factorId: null,
         activityValue: null, electricityState: null, confidence: 1.0, kgCo2e: null,
-        status: "excluded", excluded: true,
-        exclusionReason: "personal_expense",
+        status: "excluded", excluded: true, exclusionReason: "personal_expense",
         source: "rule", scope: null,
+        classificationNotes: "source=rule:personal_expense_detection",
       });
       continue;
     }
 
-    // 5c. Try keyword classifier
-    const result = classify(row.description);
+    // ── TIER 0: Merchant Rules Engine ──────────────────────────────────
+    const ruleMatch = await findMerchantRule(row.description);
 
-    const noFlags    = result && result.flags.length === 0;
-    const strongConf = result && result.confidence >= AUTO_THRESHOLD;
-
-    if (result && noFlags && strongConf && result.activityValue != null) {
-      // Strong keyword match WITH activity data — try DB lookup for factor
-      aiQueue.push({ ...row, _keyword: result } as PendingRow & { _keyword: typeof result });
-    } else {
-      // No match, weak match, or missing activity → defer to AI
-      aiQueue.push(row);
-    }
-  }
-
-  // ── 6. Tier 2 — Process queued items via AI (or finalize keyword hits) ──
-  let aiUsedCount = 0;
-  const aiEnabled = !!process.env.OPENROUTER_API_KEY;
-
-  for (let i = 0; i < aiQueue.length; i += AI_BATCH_SIZE) {
-    const batch = aiQueue.slice(i, i + AI_BATCH_SIZE);
-    const settled = await Promise.all(
-      batch.map(async (row) => {
-        const amountAud = parseFloat(row.amount_aud) || 0;
-
-        // Use AI ensemble (it's our highest-quality classifier)
-        if (!aiEnabled || aiUsedCount >= AI_MAX_PER_CALL) {
-          return { row, ai: null };
-        }
-        aiUsedCount++;
-        const ai = await tryClassifyEnsemble({
-          description:        row.description,
-          amount_aud:         amountAud,
-          transaction_date:   row.transaction_date,
-          reporting_period_start: periodStart,
-          reporting_period_end:   periodEnd,
-          company_state:      company.state ?? undefined,
-        });
-        return { row, ai };
-      }),
-    );
-
-    for (const { row, ai } of settled) {
-      if (!ai) {
+    if (ruleMatch) {
+      // 5c-excluded. Finance exclusion rules
+      if (ruleMatch.category_code === "excluded_finance" || ruleMatch.category_code === "excluded_personal") {
         updates.push({
-          id: row.id, categoryCode: "", factorId: null,
-          activityValue: null, electricityState: null, confidence: 0, kgCo2e: null,
+          id: row.id, categoryCode: ruleMatch.category_code, factorId: null,
+          activityValue: null, electricityState: null, confidence: 1.0, kgCo2e: null,
+          status: "excluded", excluded: true, exclusionReason: "not_emission_relevant",
+          source: "rule", scope: null,
+          classificationNotes: `source=rule:${ruleMatch.id} merchant="${ruleMatch.merchant_name}" citation="${ruleMatch.notes_citation ?? ''}"`,
+        });
+        ruleMatched++;
+        continue;
+      }
+
+      // 5c-rule. Known merchant — category is certain; quantity may be missing.
+      const ruleScope = (ruleMatch.scope === 1 || ruleMatch.scope === 2 || ruleMatch.scope === 3)
+        ? (ruleMatch.scope as 1 | 2 | 3)
+        : null;
+
+      // Extract quantity using keyword classifier (re-using its regex logic)
+      const keywordResult = classify(row.description);
+      const activityValue = keywordResult?.activityValue ?? null;
+
+      // Scope 2 electricity requires state
+      const electricityState = ruleMatch.scope === 2 ? (company.state ?? null) : null;
+
+      // If rule requires state and we don't have one → needs_review
+      if (ruleMatch.requires_state && !electricityState) {
+        updates.push({
+          id: row.id, categoryCode: ruleMatch.category_code, factorId: null,
+          activityValue: null, electricityState: null, confidence: 1.0, kgCo2e: null,
           status: "needs_review", excluded: false, exclusionReason: null,
-          source: "ai_ensemble", scope: null,
+          source: "rule", scope: ruleScope,
+          classificationNotes: `source=rule:${ruleMatch.id} merchant="${ruleMatch.merchant_name}" flag=missing_state citation="${ruleMatch.notes_citation ?? ''}"`,
         });
+        ruleMatched++;
         continue;
       }
 
-      // AI marked as excluded
-      if (ai.excluded) {
-        const code = ai.exclusion_reason === "personal_expense"
-          ? "excluded_personal"
-          : "excluded_finance";
+      // If activity_unit is NULL (e.g. accommodation) → quantity-based calc impossible
+      // Always needs_review with category pre-filled so reviewer adds quantity manually.
+      if (ruleMatch.activity_unit == null) {
         updates.push({
-          id: row.id, categoryCode: code, factorId: null,
-          activityValue: null, electricityState: null, confidence: ai.confidence,
-          kgCo2e: null,
-          status: "excluded", excluded: true,
-          exclusionReason: ai.exclusion_reason ?? "not_emission_relevant",
-          source: "ai_ensemble", scope: ai.scope,
-        });
-        continue;
-      }
-
-      // Look up emission_factor from DB
-      const cat = categoryMap[ai.category];
-      if (!cat) {
-        updates.push({
-          id: row.id, categoryCode: ai.category, factorId: null,
-          activityValue: ai.activity_value, electricityState: ai.electricity_state,
-          confidence: ai.confidence, kgCo2e: null,
+          id: row.id, categoryCode: ruleMatch.category_code, factorId: null,
+          activityValue: null, electricityState, confidence: 1.0, kgCo2e: null,
           status: "needs_review", excluded: false, exclusionReason: null,
-          source: "ai_ensemble", scope: ai.scope,
+          source: "rule", scope: ruleScope,
+          classificationNotes: `source=rule:${ruleMatch.id} merchant="${ruleMatch.merchant_name}" flag=no_activity_unit citation="${ruleMatch.notes_citation ?? ''}"`,
         });
+        ruleMatched++;
         continue;
       }
 
-      // Compute kg CO2e if we have activity + factor
+      // Try to compute CO2e from extracted quantity
       let kgCo2e: number | null = null;
       let factorId: string | null = null;
 
-      if (ai.activity_value != null) {
-        const factor = await fetchFactor(ai.category, ai.scope, ai.electricity_state);
+      if (activityValue != null && ruleScope != null) {
+        const factor = await fetchFactor(
+          ruleMatch.category_code, ruleScope, electricityState, company.nga_edition_year,
+        );
         if (factor) {
           factorId = factor.id;
-          kgCo2e   = ai.activity_value * parseFloat(factor.co2e_factor);
+          kgCo2e   = Math.round(activityValue * parseFloat(factor.co2e_factor) * 10000) / 10000;
         }
       }
 
-      const status: UpdateRow["status"] = ai.needs_review || kgCo2e == null
-        ? "needs_review"
-        : "classified";
+      const status: UpdateRow["status"] = (activityValue != null && kgCo2e != null)
+        ? "classified"
+        : "needs_review";
+
+      const flagNote = activityValue == null
+        ? " flag=no_activity_quantity"
+        : kgCo2e == null ? " flag=factor_not_found" : "";
 
       updates.push({
-        id: row.id, categoryCode: ai.category, factorId,
-        activityValue: ai.activity_value, electricityState: ai.electricity_state,
-        confidence: ai.confidence,
-        kgCo2e: kgCo2e != null ? Math.round(kgCo2e * 10000) / 10000 : null,
+        id: row.id, categoryCode: ruleMatch.category_code, factorId,
+        activityValue, electricityState, confidence: 1.0, kgCo2e,
         status, excluded: false, exclusionReason: null,
-        source: "ai_ensemble", scope: ai.scope,
+        source: "rule", scope: ruleScope,
+        classificationNotes: `source=rule:${ruleMatch.id} merchant="${ruleMatch.merchant_name}"${flagNote} citation="${ruleMatch.notes_citation ?? ''}"`,
       });
+      ruleMatched++;
+      continue;
     }
+
+    // ── TIER 1: Keyword classifier ──────────────────────────────────────
+    const result = classify(row.description);
+
+    const hasActivity   = result?.activityValue != null;
+    const strongMatch   = result != null && result.confidence >= AUTO_THRESHOLD;
+    const noFlags       = result != null && result.flags.length === 0;
+
+    if (result && strongMatch && noFlags && hasActivity) {
+      // Strong keyword match with extracted quantity — try to resolve factor
+      const kwScope = result.scope as 1 | 2 | 3;
+      const electricityState = kwScope === 2 ? (company.state ?? null) : null;
+
+      if (kwScope === 2 && !electricityState) {
+        updates.push({
+          id: row.id, categoryCode: result.category, factorId: null,
+          activityValue: result.activityValue, electricityState: null, confidence: result.confidence, kgCo2e: null,
+          status: "needs_review", excluded: false, exclusionReason: null,
+          source: "keyword", scope: kwScope,
+          classificationNotes: `source=keyword confidence=${result.confidence} flag=missing_state`,
+        });
+        keywordMatched++;
+        continue;
+      }
+
+      const factor = await fetchFactor(result.category, kwScope, electricityState, company.nga_edition_year);
+      const kgCo2e = factor && result.activityValue != null
+        ? Math.round(result.activityValue * parseFloat(factor.co2e_factor) * 10000) / 10000
+        : null;
+
+      const status: UpdateRow["status"] = kgCo2e != null ? "classified" : "needs_review";
+
+      updates.push({
+        id: row.id, categoryCode: result.category, factorId: factor?.id ?? null,
+        activityValue: result.activityValue, electricityState, confidence: result.confidence,
+        kgCo2e,
+        status, excluded: false, exclusionReason: null,
+        source: "keyword", scope: kwScope,
+        classificationNotes: `source=keyword confidence=${result.confidence}${kgCo2e == null ? ' flag=factor_not_found' : ''}`,
+      });
+      keywordMatched++;
+      continue;
+    }
+
+    // ── NO MATCH — needs_review (AI removed: greenwashing risk) ─────────
+    // Category hint from weak keyword result (if any) for dashboard display.
+    const hintCode = result?.category ?? "";
+    const hintConf = result?.confidence ?? 0;
+
+    updates.push({
+      id: row.id, categoryCode: hintCode, factorId: null,
+      activityValue: null, electricityState: null, confidence: hintConf, kgCo2e: null,
+      status: "needs_review", excluded: false, exclusionReason: null,
+      source: "unmatched", scope: null,
+      classificationNotes: `source=unmatched${hintCode ? ` hint=${hintCode}` : ''} flag=no_activity_data — manual review required`,
+    });
   }
 
-  // ── 7. Persist all updates ───────────────────────────────────────────
-  let classified = 0;
-  let flagged    = 0;
-  let excluded   = 0;
-  let unclassifiedCount = 0;
+  // ── 6. Persist all updates ───────────────────────────────────────────
+  let classified     = 0;
+  let flagged        = 0;
+  let excluded       = 0;
+  let unclassified   = 0;
 
   for (const u of updates) {
-    const cat = u.categoryCode ? categoryMap[u.categoryCode] : null;
+    const cat        = u.categoryCode ? categoryMap[u.categoryCode] : null;
     const categoryId = cat ? cat.id : null;
+    const scopeVal   = u.scope ?? (cat?.scope ?? null);
 
     try {
       await sql`
@@ -296,111 +344,4 @@ export async function POST(_request: NextRequest): Promise<NextResponse> {
           emission_factor_id        = ${u.factorId}::uuid,
           quantity_value            = ${u.activityValue},
           electricity_state         = ${u.electricityState},
-          co2e_kg                   = ${u.kgCo2e},
-          scope                     = ${u.scope},
-          classification_confidence = ${u.confidence},
-          classification_status     = ${u.status},
-          classification_notes      = ${`source=${u.source}`},
-          excluded                  = ${u.excluded},
-          exclusion_reason          = ${u.exclusionReason},
-          classified_at             = NOW(),
-          updated_at                = NOW()
-        WHERE id         = ${u.id}::uuid
-          AND company_id = ${companyId}::uuid
-      `;
-
-      if (u.excluded)                       excluded++;
-      else if (u.status === "classified")   classified++;
-      else if (u.status === "needs_review") flagged++;
-      else                                  unclassifiedCount++;
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.error(`[classify] Update failed for tx ${u.id}:`, msg);
-      unclassifiedCount++;
-    }
-  }
-
-  return NextResponse.json({
-    classified, flagged, excluded,
-    ai_used:       aiUsedCount,
-    unclassified:  unclassifiedCount,
-    total:         rows.length,
-  });
-}
-
-// ─── Emission factor lookup ──────────────────────────────────────────────────
-// Strict: uses current NGA edition + scope + state. Returns null if not found
-// (caller flags transaction as needs_review).
-
-async function fetchFactor(
-  categoryCode: string,
-  scope: 1 | 2 | 3,
-  state: string | null,
-): Promise<FactorRow | null> {
-  // Map category code → emission_factors.activity name pattern.
-  // Since emission_factors has its own activity strings, we filter loosely
-  // by scope and (for electricity) state.
-  if (scope === 2 && categoryCode === "electricity") {
-    if (!state) return null;
-    const r = await sql<FactorRow[]>`
-      SELECT id::text, co2e_factor::text, unit, source_table, state
-      FROM   emission_factors
-      WHERE  is_current = TRUE
-        AND  scope = 2
-        AND  state = ${state}
-      LIMIT  1
-    `.catch(() => []);
-    return r[0] ?? null;
-  }
-
-  // For Scope 1 fuels, match by scope + activity LIKE
-  const fuelMap: Record<string, string> = {
-    fuel_petrol:  "Petrol",
-    fuel_diesel:  "Diesel",
-    fuel_lpg:     "LPG",
-    natural_gas:  "Natural Gas",
-    refrigerants: "Refrigerant",
-  };
-
-  if (scope === 1 && fuelMap[categoryCode]) {
-    const pat = `%${fuelMap[categoryCode]}%`;
-    const r = await sql<FactorRow[]>`
-      SELECT id::text, co2e_factor::text, unit, source_table, state
-      FROM   emission_factors
-      WHERE  is_current = TRUE
-        AND  scope = 1
-        AND  activity ILIKE ${pat}
-      ORDER  BY created_at DESC
-      LIMIT  1
-    `.catch(() => []);
-    return r[0] ?? null;
-  }
-
-  // Scope 3 — best-effort lookup by category keyword
-  const scope3Map: Record<string, string> = {
-    air_travel_domestic:      "Domestic",
-    air_travel_international: "International",
-    rideshare_taxi:           "Taxi",
-    public_transport:         "Bus",
-    rental_vehicle:           "Hire",
-    accommodation_business:   "Accommodation",
-    road_freight:             "Freight",
-    waste:                    "Waste",
-  };
-
-  if (scope === 3 && scope3Map[categoryCode]) {
-    const pat = `%${scope3Map[categoryCode]}%`;
-    const r = await sql<FactorRow[]>`
-      SELECT id::text, co2e_factor::text, unit, source_table, state
-      FROM   emission_factors
-      WHERE  is_current = TRUE
-        AND  scope = 3
-        AND  activity ILIKE ${pat}
-      ORDER  BY created_at DESC
-      LIMIT  1
-    `.catch(() => []);
-    return r[0] ?? null;
-  }
-
-  return null;
-}
+          co2e_kg                   = ${u.kgCo2
