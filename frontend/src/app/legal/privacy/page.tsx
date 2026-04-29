@@ -1,123 +1,89 @@
 import Link from "next/link";
-import { ArrowLeft, ShieldCheck } from "lucide-react";
+import { Leaf, ShieldCheck } from "lucide-react";
 
 export const metadata = {
-  title: "Privacy Policy | EcoLink Australia",
+  title: "Privacy Policy — EcoLink Australia",
   description:
-    "How EcoLink Australia collects, uses, and protects your data. Compliant with the Privacy Act 1988 (Cth) and Australian Privacy Principles.",
+    "EcoLink's Privacy Policy. Your Xero data is never used to train AI. Compliant with the Privacy Act 1988 and Australian Privacy Principles.",
 };
 
 export default function PrivacyPage() {
   return (
-    <div className="min-h-screen bg-aw-gray/40 pt-28 pb-24 px-6">
-      <div className="mx-auto max-w-3xl">
+    <div className="min-h-screen bg-aw-gray/30">
+      <header className="border-b border-aw-gray-border bg-white">
+        <div className="mx-auto max-w-3xl px-6 py-5 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-aw-green shadow-md shadow-aw-green/20">
+              <Leaf size={16} className="text-white" strokeWidth={2.5} />
+            </div>
+            <span className="font-extrabold text-xl tracking-tight text-aw-slate">
+              EcoLink<span className="text-aw-green">.</span>
+            </span>
+          </Link>
+          <Link href="/legal/terms" className="text-sm font-bold text-aw-green hover:underline">
+            Terms of Service →
+          </Link>
+        </div>
+      </header>
 
-        <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-aw-slate-mid hover:text-aw-green transition-colors mb-10">
-          <ArrowLeft size={15} /> Back to home
-        </Link>
+      <main className="mx-auto max-w-3xl px-6 py-12">
+        <div className="mb-10 flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-aw-green-light border border-aw-green/20">
+            <ShieldCheck size={22} className="text-aw-green" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-aw-slate">Privacy Policy</h1>
+            <p className="mt-1 text-sm text-aw-slate-mid">
+              Effective 1 July 2025 · Last updated 29 April 2026 · Version 1.0
+            </p>
+          </div>
+        </div>
 
-        <p className="text-xs font-bold uppercase tracking-widest text-aw-green mb-3">Legal</p>
-        <h1 className="text-4xl font-black text-aw-slate mb-2">Privacy Policy</h1>
-        <p className="text-sm text-aw-slate-mid mb-10">Last updated: April 2026</p>
-
-        {/* Security callout */}
-        <div className="rounded-2xl border border-aw-green/30 bg-aw-green-light/30 p-5 mb-10 flex gap-4">
-          <ShieldCheck size={20} className="text-aw-green shrink-0 mt-0.5" />
-          <p className="text-sm text-aw-green-dark font-medium leading-relaxed">
-            EcoLink connects to your accounting software via OAuth 2.0 — the same protocol used by
-            banks. We never store your Xero or MYOB login credentials. OAuth access tokens are
-            encrypted at rest using AES-256-GCM before being saved to our database.
+        {/* Zero AI training callout */}
+        <div className="mb-8 rounded-2xl border-2 border-aw-green/30 bg-aw-green-light p-6">
+          <p className="text-sm font-black text-aw-green mb-2">
+            🔒 Zero AI Training — Architectural Guarantee
+          </p>
+          <p className="text-sm text-aw-slate leading-relaxed">
+            Your Xero transaction data, financial figures, and emission calculations are{" "}
+            <strong>never used to train, fine-tune, or improve any AI or machine learning model</strong> —
+            by EcoLink or any third party. Our carbon accounting engine is 100% deterministic
+            rule-based code, with no connection to any LLM or AI API.
           </p>
         </div>
 
-        <div className="space-y-10 text-[15px] text-aw-slate-mid leading-relaxed">
-
+        <div className="space-y-8 text-sm text-aw-slate-mid leading-relaxed">
           <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">1. Who We Are</h2>
+            <h2 className="text-lg font-black text-aw-slate mb-3">1. Introduction</h2>
             <p>
-              EcoLink Australia Pty Ltd (<strong>"EcoLink"</strong>, <strong>"we"</strong>,
-              <strong>"us"</strong>) operates the EcoLink carbon accounting platform. We are
-              committed to protecting your personal information in accordance with the{" "}
-              <em>Privacy Act 1988</em> (Cth) and the Australian Privacy Principles (APPs).
+              EcoLink Australia Pty Ltd (&ldquo;EcoLink&rdquo;) is committed to protecting your privacy.
+              This policy complies with the <strong>Privacy Act 1988 (Cth)</strong> and the{" "}
+              <strong>Australian Privacy Principles (APPs)</strong>.
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">2. Data Collection</h2>
-            <p className="mb-4">We collect the following categories of information:</p>
-            <div className="space-y-3">
-              {[
-                {
-                  title: "Account information",
-                  desc: "Name, email address, company name, ABN, state, industry, and password (stored as a bcrypt hash — never in plain text).",
-                },
-                {
-                  title: "Financial transaction data",
-                  desc: "Transaction descriptions, dates, amounts, and supplier names imported from your Xero account via OAuth 2.0 read-only access. We import this data to calculate your carbon emissions. We do not collect banking credentials or card numbers.",
-                },
-                {
-                  title: "Usage data",
-                  desc: "Pages visited, features used, browser type, and IP address, collected via server logs for platform improvement and security monitoring.",
-                },
-                {
-                  title: "Billing information",
-                  desc: "Payment processing is handled entirely by Stripe. EcoLink does not receive or store card numbers. We receive only a customer reference ID and subscription status from Stripe.",
-                },
-              ].map((item) => (
-                <div key={item.title} className="rounded-xl border border-aw-gray-border bg-white p-4">
-                  <p className="font-bold text-aw-slate text-sm mb-1">{item.title}</p>
-                  <p className="text-sm">{item.desc}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">3. AI Processing</h2>
-            <p className="mb-3">
-              EcoLink&apos;s AI engine processes transaction <strong>descriptions and amounts</strong>{" "}
-              solely to classify them into carbon emission categories. Specifically:
-            </p>
-            <ul className="list-disc pl-5 space-y-2 text-sm">
-              <li>Transaction descriptions are sent to Groq (llama-3.3-70b) and Google Gemini for semantic classification. Only the transaction text is transmitted — no company name, ABN, or user identifiers are included in these API calls.</li>
-              <li>Your financial data is <strong>not used to train</strong> any publicly available AI model.</li>
-              <li>Anonymised, aggregated patterns (e.g. "fuel purchases represent 23% of construction sector spend") may be used to improve EcoLink&apos;s classification accuracy and publish industry benchmarks.</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">4. Data Security</h2>
-            <ul className="list-disc pl-5 space-y-2 text-sm">
-              <li><strong>OAuth tokens encrypted at rest:</strong> Xero access and refresh tokens are encrypted using AES-256-GCM before being saved to our database. A database breach does not expose live API credentials.</li>
-              <li><strong>TLS in transit:</strong> All data between your browser, our servers, and third-party APIs is encrypted using TLS 1.2+.</li>
-              <li><strong>Password hashing:</strong> Passwords are hashed with bcrypt (12 rounds) and never stored in recoverable form.</li>
-              <li><strong>No banking credentials stored:</strong> EcoLink uses revocable OAuth access tokens. Your Xero login password is never transmitted to or stored by EcoLink.</li>
-              <li><strong>Access controls:</strong> Database access is restricted to the application server. No public database endpoint is exposed.</li>
-            </ul>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">5. Third-Party Services</h2>
-            <p className="mb-4">EcoLink uses the following third-party services:</p>
-            <div className="rounded-2xl border border-aw-gray-border bg-white overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-aw-gray-border bg-aw-gray/60">
-                    <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-aw-slate-mid">Service</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold uppercase tracking-wider text-aw-slate-mid">Purpose</th>
+            <h2 className="text-lg font-black text-aw-slate mb-3">2. Xero Data (Read-Only)</h2>
+            <div className="overflow-x-auto rounded-xl border border-aw-gray-border">
+              <table className="w-full text-xs">
+                <thead className="bg-aw-gray/40">
+                  <tr>
+                    {["Xero Scope", "Data", "Purpose"].map((h) => (
+                      <th key={h} className="px-4 py-3 text-left font-bold uppercase tracking-wider text-aw-slate-light">{h}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-aw-gray-border">
                   {[
-                    ["Xero", "Accounting data import via OAuth 2.0 (read-only)"],
-                    ["Stripe", "Payment processing — card data handled by Stripe, not EcoLink"],
-                    ["Resend", "Transactional emails (verification, password reset, receipts)"],
-                    ["Groq / Google Gemini", "AI transaction classification — anonymised descriptions only"],
-                    ["Railway", "Cloud hosting — servers in the United States"],
-                  ].map(([svc, purpose]) => (
-                    <tr key={svc} className="hover:bg-aw-gray/30">
-                      <td className="px-4 py-3 font-semibold text-aw-slate">{svc}</td>
-                      <td className="px-4 py-3 text-aw-slate-mid">{purpose}</td>
+                    ["accounting.banktransactions.read", "Bank transactions", "Carbon classification"],
+                    ["accounting.invoices.read", "Invoices and bills", "Supplier identification"],
+                    ["accounting.contacts.read", "Supplier names", "Merchant routing"],
+                    ["accounting.settings.read", "Chart of accounts", "Account name resolution"],
+                  ].map(([scope, data, purpose]) => (
+                    <tr key={scope} className="bg-white">
+                      <td className="px-4 py-3 font-mono text-aw-green text-[11px]">{scope}</td>
+                      <td className="px-4 py-3 text-aw-slate">{data}</td>
+                      <td className="px-4 py-3">{purpose}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -126,54 +92,65 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">6. Data Retention</h2>
-            <p>
-              We retain your account data and transaction records for as long as your account is
-              active. If you cancel your subscription, your data is retained for 30 days to allow
-              export, then deleted. You may request deletion at any time by contacting us. Transaction
-              data is not deleted from your Xero account when removed from EcoLink.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">7. Your Rights</h2>
-            <p className="mb-3">Under the Australian Privacy Principles you have the right to:</p>
-            <ul className="list-disc pl-5 space-y-1 text-sm">
-              <li>Access the personal information we hold about you</li>
-              <li>Correct inaccurate or incomplete information</li>
-              <li>Request deletion of your account and associated data</li>
-              <li>Lodge a complaint with the Office of the Australian Information Commissioner (OAIC)</li>
+            <h2 className="text-lg font-black text-aw-slate mb-3">3. What We Do NOT Do</h2>
+            <ul className="space-y-2">
+              {[
+                "Use your data to train, fine-tune, or evaluate any AI or ML model",
+                "Sell, rent, or broker your data to any third party",
+                "Use your financial data for advertising or profiling",
+                "Share transaction data with other EcoLink customers",
+                "Store Xero OAuth tokens in plain text (AES-256-GCM encrypted)",
+              ].map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <span className="text-aw-green font-bold shrink-0">✗</span>
+                  {item}
+                </li>
+              ))}
             </ul>
           </section>
 
           <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">8. Cookies</h2>
-            <p>
-              EcoLink uses session cookies for authentication and small preference cookies for UI
-              state. We do not use third-party advertising or tracking cookies. Disabling cookies
-              will prevent login from functioning.
-            </p>
+            <h2 className="text-lg font-black text-aw-slate mb-3">4. Security</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                ["Encryption in transit", "TLS 1.3"],
+                ["OAuth tokens", "AES-256-GCM at rest"],
+                ["Storage bucket", "Private — signed URLs (5 min TTL)"],
+                ["Database", "Row-Level Security on all tables"],
+                ["Reports retention", "7 years (ASIC obligations)"],
+                ["Xero tokens on disconnect", "Deleted immediately"],
+              ].map(([label, val]) => (
+                <div key={label} className="rounded-xl bg-aw-gray/40 border border-aw-gray-border px-4 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-aw-slate-light">{label}</p>
+                  <p className="text-sm font-bold text-aw-slate mt-0.5">{val}</p>
+                </div>
+              ))}
+            </div>
           </section>
 
           <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">9. Contact</h2>
+            <h2 className="text-lg font-black text-aw-slate mb-3">5. Your Rights (APPs)</h2>
             <p>
-              For privacy enquiries or to exercise your rights:{" "}
-              <a href="mailto:privacy@ecolink.com.au" className="text-aw-green hover:underline font-semibold">
+              Under the Privacy Act 1988, you may access, correct, or request deletion of your
+              personal information. Contact:{" "}
+              <a href="mailto:privacy@ecolink.com.au" className="text-aw-green font-bold hover:underline">
                 privacy@ecolink.com.au
-              </a>
+              </a>.
+              For unresolved complaints:{" "}
+              <a href="https://oaic.gov.au" target="_blank" rel="noreferrer" className="text-aw-green hover:underline">
+                Office of the Australian Information Commissioner (OAIC)
+              </a>.
             </p>
           </section>
-
         </div>
 
-        <div className="mt-12 pt-8 border-t border-aw-gray-border">
-          <Link href="/legal/terms" className="text-sm font-bold text-aw-green hover:underline">
+        <div className="mt-12 pt-6 border-t border-aw-gray-border flex items-center justify-between text-xs text-aw-slate-mid">
+          <span>© 2026 EcoLink Australia Pty Ltd</span>
+          <Link href="/legal/terms" className="font-bold text-aw-green hover:underline">
             Terms of Service →
           </Link>
         </div>
-
-      </div>
+      </main>
     </div>
   );
 }

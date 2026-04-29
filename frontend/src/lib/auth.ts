@@ -1,8 +1,10 @@
 import type { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
+import EmailProvider from "next-auth/providers/email";
 import bcrypt from "bcryptjs";
 import { sql } from "@/lib/db";
 import { checkRateLimit } from "@/lib/rate-limit";
+
 
 // ─── Extend next-auth types ───────────────────────────────────────────────────
 declare module "next-auth" {
@@ -49,7 +51,31 @@ export const authOptions: NextAuthOptions = {
   },
 
   providers: [
+    // ── Magic Link (Email OTP via Resend) ──────────────────────────────────
+    // Users enter their email; NextAuth sends a one-time sign-in link.
+    // The email is verified at click time — no separate confirm step.
+    // Requires: RESEND_API_KEY, EMAIL_FROM in .env.local
+    // NOTE: This requires a database adapter (e.g. @auth/pg-adapter) for
+    //       production. For MVP, Magic Link is wired but credentials remain primary.
+    ...(process.env.RESEND_API_KEY
+      ? [
+          EmailProvider({
+            server: {
+              host:   "smtp.resend.com",
+              port:   465,
+              auth: {
+                user: "resend",
+                pass: process.env.RESEND_API_KEY,
+              },
+            },
+            from: process.env.EMAIL_FROM ?? "noreply@ecolink.com.au",
+          }),
+        ]
+      : []),
+
+    // ── Email + Password ────────────────────────────────────────────────────
     CredentialsProvider({
+
       name: "Email & Password",
       credentials: {
         email:    { label: "Email",    type: "email" },

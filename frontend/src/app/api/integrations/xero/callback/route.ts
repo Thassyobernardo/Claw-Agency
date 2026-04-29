@@ -110,11 +110,20 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return redirectWithError("Connected to Xero but failed to save credentials.");
   }
 
-  const response = NextResponse.redirect(
-    `${APP_URL}/dashboard?xero=connected&org=${encodeURIComponent(tenant.tenantName)}`
-  );
+  // Honour returnTo cookie if set (e.g. from onboarding wizard)
+  const returnTo = request.cookies.get("xero_return_url")?.value;
+  const redirectBase = returnTo && returnTo.startsWith("/")
+    ? `${APP_URL}${returnTo}`
+    : `${APP_URL}/dashboard`;
+
+  const redirectUrl = new URL(redirectBase);
+  redirectUrl.searchParams.set("xero", "connected");
+  redirectUrl.searchParams.set("org", tenant.tenantName);
+
+  const response = NextResponse.redirect(redirectUrl.toString());
 
   response.cookies.set("xero_oauth_state", "", { httpOnly: true, maxAge: 0, path: "/" });
+  response.cookies.set("xero_return_url",  "", { httpOnly: true, maxAge: 0, path: "/" });
 
   response.cookies.set("xero_tenant_id", tenant.tenantId, {
     httpOnly: true,

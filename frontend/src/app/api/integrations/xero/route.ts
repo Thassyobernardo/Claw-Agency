@@ -31,6 +31,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const state = generateState();
   const authUrl = buildAuthorizationUrl(state, origin);
 
+  // Optional ?returnTo=/onboarding?step=2 — stored in a cookie so the callback
+  // can redirect back there instead of the default dashboard.
+  const returnTo = request.nextUrl.searchParams.get("returnTo");
+
   const response = NextResponse.redirect(authUrl);
   response.cookies.set("xero_oauth_state", state, {
     httpOnly: true,
@@ -39,6 +43,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     maxAge:   600,
     path:     "/",
   });
+
+  if (returnTo) {
+    // Validate: only allow relative paths to prevent open redirect
+    const safeReturn = returnTo.startsWith("/") ? returnTo : "/dashboard";
+    response.cookies.set("xero_return_url", safeReturn, {
+      httpOnly: true,
+      secure:   process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge:   600,
+      path:     "/",
+    });
+  }
 
   return response;
 }

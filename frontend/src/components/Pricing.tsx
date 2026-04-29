@@ -100,8 +100,7 @@ export default function Pricing() {
             transition={{ delay: 0.2 }}
             className="mt-4 text-lg text-slate-400 font-medium max-w-xl mx-auto"
           >
-            All plans start with a 14-day free full-compliance audit. 
-            No credit card required to start. AUD pricing + GST.
+            All plans start with a 14-day free trial. Credit card required. AUD pricing + GST.
           </motion.p>
         </div>
 

@@ -344,4 +344,112 @@ export async function POST(_request: NextRequest): Promise<NextResponse> {
           emission_factor_id        = ${u.factorId}::uuid,
           quantity_value            = ${u.activityValue},
           electricity_state         = ${u.electricityState},
-          co2e_kg                   = ${u.kgCo2
+          co2e_kg                   = ${u.kgCo2e},
+          scope                     = ${scopeVal},
+          classification_confidence = ${u.confidence},
+          classification_status     = ${u.status},
+          classification_notes      = ${u.classificationNotes},
+          excluded                  = ${u.excluded},
+          exclusion_reason          = ${u.exclusionReason},
+          classified_at             = NOW(),
+          updated_at                = NOW()
+        WHERE id         = ${u.id}::uuid
+          AND company_id = ${companyId}::uuid
+      `;
+
+      if (u.excluded)                       excluded++;
+      else if (u.status === "classified")   classified++;
+      else if (u.status === "needs_review") flagged++;
+      else                                  unclassified++;
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[classify] Update failed for tx ${u.id}:`, msg);
+      unclassified++;
+    }
+  }
+
+  return NextResponse.json({
+    classified,
+    flagged,
+    excluded,
+    rule_matched:    ruleMatched,
+    keyword_matched: keywordMatched,
+    unclassified,
+    total: rows.length,
+  });
+}
+
+// ─── Emission factor lookup ──────────────────────────────────────────────────
+
+async function fetchFactor(
+  categoryCode: string,
+  scope: 1 | 2 | 3,
+  state: string | null,
+  ngaYear: number,
+): Promise<FactorRow | null> {
+  // Scope 2 electricity — location-based, state-specific NGA 2024 factors
+  if (scope === 2 && categoryCode === "electricity") {
+    if (!state) return null;
+    const r = await sql<FactorRow[]>`
+      SELECT id::text, co2e_factor::text, unit, source_table, state
+      FROM   emission_factors
+      WHERE  scope = 2
+        AND  state = ${state}
+        AND  (nga_year = ${ngaYear} OR is_current = TRUE)
+      ORDER  BY (nga_year = ${ngaYear}) DESC, is_current DESC
+      LIMIT  1
+    `.catch(() => []);
+    return r[0] ?? null;
+  }
+
+  // Scope 1 liquid fuels
+  const fuelMap: Record<string, string> = {
+    fuel_petrol:  "Petrol",
+    fuel_diesel:  "Diesel",
+    fuel_lpg:     "LPG",
+    natural_gas:  "Natural Gas",
+    refrigerants: "Refrigerant",
+  };
+
+  if (scope === 1 && fuelMap[categoryCode]) {
+    const pat = `%${fuelMap[categoryCode]}%`;
+    const r = await sql<FactorRow[]>`
+      SELECT id::text, co2e_factor::text, unit, source_table, state
+      FROM   emission_factors
+      WHERE  scope = 1
+        AND  activity ILIKE ${pat}
+        AND  (nga_year = ${ngaYear} OR is_current = TRUE)
+      ORDER  BY (nga_year = ${ngaYear}) DESC, is_current DESC, created_at DESC
+      LIMIT  1
+    `.catch(() => []);
+    return r[0] ?? null;
+  }
+
+  // Scope 3 categories
+  const scope3Map: Record<string, string> = {
+    air_travel_domestic:      "Domestic",
+    air_travel_international: "International",
+    rideshare_taxi:           "Taxi",
+    public_transport:         "Bus",
+    rental_vehicle:           "Hire",
+    accommodation_business:   "Accommodation",
+    road_freight:             "Freight",
+    waste:                    "Waste",
+  };
+
+  if (scope === 3 && scope3Map[categoryCode]) {
+    const pat = `%${scope3Map[categoryCode]}%`;
+    const r = await sql<FactorRow[]>`
+      SELECT id::text, co2e_factor::text, unit, source_table, state
+      FROM   emission_factors
+      WHERE  scope = 3
+        AND  activity ILIKE ${pat}
+        AND  (nga_year = ${ngaYear} OR is_current = TRUE)
+      ORDER  BY (nga_year = ${ngaYear}) DESC, is_current DESC, created_at DESC
+      LIMIT  1
+    `.catch(() => []);
+    return r[0] ?? null;
+  }
+
+  return null;
+}

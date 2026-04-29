@@ -4,10 +4,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Leaf, ArrowLeft, CheckCircle2, XCircle, ChevronDown,
   Loader2, Inbox, AlertCircle, RefreshCw, Zap, Truck,
-  Plane, ShoppingBag, BarChart3, Sparkles,
+  Plane, ShoppingBag, BarChart3, Sparkles, FlaskConical,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import ManualEntryDrawer from "@/components/dashboard/ManualEntryDrawer";
+
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -177,10 +179,13 @@ function TxCard({
   tx,
   categories,
   onAction,
+  onClassify,
 }: {
+
   tx: TxReview;
   categories: Category[];
   onAction: (id: string, state: ActionState) => void;
+  onClassify?: (tx: TxReview) => void;
 }) {
   const pct = confidencePct(tx.classification_confidence);
 
@@ -279,6 +284,15 @@ function TxCard({
         >
           <XCircle size={13} /> Reject
         </button>
+        {/* Classify button — opens ManualEntryDrawer */}
+        {onClassify && (
+          <button
+            onClick={() => onClassify(tx)}
+            className="flex items-center gap-1.5 rounded-xl border border-aw-green/30 bg-aw-green-light px-4 py-2 text-xs font-bold text-aw-green transition hover:bg-aw-green hover:text-white active:scale-95"
+          >
+            <FlaskConical size={13} /> Classify
+          </button>
+        )}
         <div className="ml-auto">
           <ReclassifyDropdown
             categories={categories}
@@ -302,6 +316,18 @@ export default function ReviewPage() {
   const [actionStates, setActionStates] = useState<Record<string, ActionState>>({});
   const [approvedCount, setApprovedCount] = useState(0);
   const [rejectedCount, setRejectedCount] = useState(0);
+
+  // ManualEntryDrawer state
+  const [drawerTx, setDrawerTx] = useState<TxReview | null>(null);
+  // userId comes from the session — fetched lazily from /api/auth/session
+  const [userId, setUserId]     = useState("");
+  useEffect(() => {
+    fetch("/api/auth/session")
+      .then((r) => r.json())
+      .then((d) => setUserId(d?.user?.id ?? ""))
+      .catch(() => {});
+  }, []);
+
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -456,6 +482,7 @@ export default function ReviewPage() {
                   tx={tx}
                   categories={categories}
                   onAction={handleTxAction}
+                  onClassify={(t) => setDrawerTx(t)}
                 />
               ))}
             </AnimatePresence>
@@ -469,6 +496,28 @@ export default function ReviewPage() {
         )}
 
       </main>
+
+      {/* ManualEntryDrawer — slide-in from right */}
+      <AnimatePresence>
+        {drawerTx && (
+          <ManualEntryDrawer
+            key={drawerTx.id}
+            txId={drawerTx.id}
+            txDescription={drawerTx.description || drawerTx.supplier_name || "Transaction"}
+            userId={userId}
+            onResolved={(id, co2eTonnes) => {
+              setDrawerTx(null);
+              setApprovedCount((p) => p + 1);
+              setTimeout(() => {
+                setTransactions((prev) => prev.filter((t) => t.id !== id));
+                setTotal((p) => Math.max(0, p - 1));
+              }, 400);
+              console.info(`[Review] Classified ${id}: ${co2eTonnes} tCO2e`);
+            }}
+            onClose={() => setDrawerTx(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -1,189 +1,138 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { Leaf, Scale, AlertTriangle } from "lucide-react";
 
 export const metadata = {
-  title: "Terms of Service | EcoLink Australia",
+  title: "Terms of Service — EcoLink Australia",
   description:
-    "Terms of Service for EcoLink Australia — subscription rules, data ownership, limitation of liability, and acceptable use.",
+    "EcoLink Terms of Service. NGA Factors 2025 disclaimer. Reports are management estimates, not Reasonable Assurance under ASRS 2.",
 };
 
 export default function TermsPage() {
   return (
-    <div className="min-h-screen bg-aw-gray/40 pt-28 pb-24 px-6">
-      <div className="mx-auto max-w-3xl">
+    <div className="min-h-screen bg-aw-gray/30">
+      <header className="border-b border-aw-gray-border bg-white">
+        <div className="mx-auto max-w-3xl px-6 py-5 flex items-center justify-between">
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-aw-green shadow-md shadow-aw-green/20">
+              <Leaf size={16} className="text-white" strokeWidth={2.5} />
+            </div>
+            <span className="font-extrabold text-xl tracking-tight text-aw-slate">
+              EcoLink<span className="text-aw-green">.</span>
+            </span>
+          </Link>
+          <Link href="/legal/privacy" className="text-sm font-bold text-aw-green hover:underline">
+            ← Privacy Policy
+          </Link>
+        </div>
+      </header>
 
-        <Link href="/" className="inline-flex items-center gap-2 text-sm font-semibold text-aw-slate-mid hover:text-aw-green transition-colors mb-10">
-          <ArrowLeft size={15} /> Back to home
-        </Link>
+      <main className="mx-auto max-w-3xl px-6 py-12">
+        <div className="mb-10 flex items-start gap-4">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 border border-amber-200">
+            <Scale size={22} className="text-amber-600" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black text-aw-slate">Terms of Service</h1>
+            <p className="mt-1 text-sm text-aw-slate-mid">
+              Effective 1 July 2025 · Last updated 29 April 2026 · Version 1.0
+            </p>
+          </div>
+        </div>
 
-        <p className="text-xs font-bold uppercase tracking-widest text-aw-green mb-3">Legal</p>
-        <h1 className="text-4xl font-black text-aw-slate mb-2">Terms of Service</h1>
-        <p className="text-sm text-aw-slate-mid mb-10">Last updated: April 2026</p>
+        {/* Primary disclaimer */}
+        <div className="mb-8 rounded-2xl border-2 border-red-200 bg-red-50 p-6 space-y-3">
+          <p className="text-sm font-black text-red-700 flex items-center gap-2">
+            <AlertTriangle size={16} /> Critical Disclaimer
+          </p>
+          <p className="text-sm text-red-700 leading-relaxed">
+            <strong>EcoLink reports are management-prepared estimates, NOT audited outputs.</strong>
+            {" "}They do not constitute Reasonable Assurance, Limited Assurance, or any audit under{" "}
+            <strong>ASRS 2</strong> or the Corporations Act 2001. EcoLink is not a registered auditing firm.
+            Emission calculations use <strong>NGA Factors 2025</strong> (DCCEEW) applied to data entered by you.
+          </p>
+        </div>
 
-        <div className="space-y-10 text-[15px] text-aw-slate-mid leading-relaxed">
-
+        <div className="space-y-8 text-sm text-aw-slate-mid leading-relaxed">
           <section>
             <h2 className="text-lg font-black text-aw-slate mb-3">1. Acceptance</h2>
-            <p>
-              By creating an account or using the EcoLink platform, you agree to be bound by these
-              Terms of Service (<strong>"Terms"</strong>). If you are acting on behalf of a company,
-              you represent that you have authority to bind that company. If you do not agree, do
-              not use the platform.
-            </p>
+            <p>By using the EcoLink Platform, you agree to these Terms. If acting on behalf of a company, you warrant you have authority to bind that entity.</p>
           </section>
 
           <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">2. Nature of the Service</h2>
-            <p className="mb-4">
-              EcoLink Australia Pty Ltd (<strong>"EcoLink"</strong>) provides a software-as-a-service
-              platform that:
-            </p>
-            <ul className="list-disc pl-5 space-y-2 text-sm">
-              <li>Connects to your accounting software via OAuth 2.0 and imports transaction data</li>
-              <li>Classifies transactions into greenhouse gas emission categories using AI</li>
-              <li>Calculates emissions using the <strong>spend-based method</strong> and Australian Government NGA Factors</li>
-              <li>Generates carbon reports structured to AASB S2 disclosure requirements</li>
-            </ul>
-            <div className="mt-4 rounded-xl border border-yellow-200 bg-yellow-50 p-4">
-              <p className="text-sm font-semibold text-yellow-800">
-                <strong>Important:</strong> EcoLink provides spend-based estimates. The accuracy of
-                these estimates depends on the accuracy of the transaction data in your accounting
-                software. You are responsible for reviewing classification results and the data
-                imported from Xero or MYOB. EcoLink is a calculation tool, not a certified carbon audit.
+            <h2 className="text-lg font-black text-aw-slate mb-3">2. Service Description</h2>
+            <p>EcoLink is a SaaS carbon accounting platform that imports Xero data, classifies transactions, calculates greenhouse gas emissions using <strong>NGA Factors 2025</strong> (DCCEEW), and generates AASB S2 climate-related financial disclosure documents.</p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-black text-aw-slate mb-3">3. NGA Factors 2025 — Data Accuracy Disclaimer</h2>
+            <div className="rounded-xl bg-amber-50 border border-amber-200 p-5 space-y-2">
+              <p className="font-bold text-amber-800">EcoLink does not warrant that:</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>NGA Factors 2025 are free from errors or omissions</li>
+                <li>Factors remain current for your specific operations and reporting period</li>
+                <li>Platform results are identical to manual NGA workbook calculations</li>
+              </ul>
+              <p className="font-bold text-amber-800 pt-2">You acknowledge that:</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Emission factors change annually — verify the Platform version matches your FY</li>
+                <li>The Platform uses <strong>Method 1 (Simplified Calculation)</strong> per NGA Factors 2025</li>
+                <li>Physical quantities entered manually are your responsibility to verify</li>
+              </ul>
+            </div>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-black text-aw-slate mb-3">4. No Reasonable Assurance</h2>
+            <div className="rounded-xl border-2 border-red-200 bg-red-50 p-5 space-y-3">
+              <p className="font-black text-red-700">EcoLink reports do NOT constitute:</p>
+              <ul className="space-y-1 list-disc list-inside text-red-700 font-semibold">
+                <li>Reasonable Assurance under ASRS 2 or the Corporations Act 2001</li>
+                <li>Limited Assurance engagement output</li>
+                <li>A statutory audit by a Registered Company Auditor (RCA)</li>
+              </ul>
+              <p className="text-red-700">
+                Entities required to obtain assurance under ASRS 2 must engage a qualified assurance
+                provider separately. EcoLink expressly disclaims all liability for reliance on
+                Platform outputs as a substitute for formal assurance.
               </p>
             </div>
           </section>
 
           <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">3. Accounts and Access</h2>
-            <p className="mb-3">
-              You are responsible for maintaining the confidentiality of your login credentials and
-              for all activity under your account. Notify us immediately of any unauthorised use.
-            </p>
-            <p>
-              You must provide accurate information when registering, including your ABN. Accounts
-              found to contain false information may be suspended without notice.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">4. Subscription &amp; Billing</h2>
-            <div className="space-y-3 text-sm">
-              {[
-                "All plans include a 14-day free trial. A valid payment method is required at sign-up; it will not be charged if you cancel before the trial ends.",
-                "After the trial, continued access requires a paid subscription billed monthly via Stripe.",
-                "Prices are shown in Australian dollars (AUD). 10% GST is added at checkout for Australian customers and itemised on the Stripe tax invoice, in line with the A New Tax System (Goods and Services Tax) Act 1999.",
-                "You may cancel at any time via the billing portal. Access continues until the end of the current billing period. No refunds are issued for unused partial months.",
-                "EcoLink reserves the right to change pricing with 30 days' written notice to your registered email.",
-                "Accounts with failed payments are suspended after 7 days. Data is retained for 30 days after suspension before deletion.",
-              ].map((item, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <span className="shrink-0 mt-1 h-1.5 w-1.5 rounded-full bg-aw-green" />
-                  <p>{item}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">5. Your Data</h2>
-            <p className="mb-3">
-              You retain ownership of all data you import into EcoLink. By using EcoLink, you grant
-              us a limited licence to process that data solely to provide the service.
-            </p>
-            <p>
-              EcoLink may use anonymised, aggregated data (not attributable to your business) to
-              improve the classification AI and publish industry benchmarks. Individual business
-              data is never shared with third parties without your written consent.
-            </p>
+            <h2 className="text-lg font-black text-aw-slate mb-3">5. User-Provided Data</h2>
+            <p>Report accuracy depends entirely on data you provide: Xero transactions, manually entered physical quantities, and selected date ranges. EcoLink applies NGA Factors correctly to inputs received but cannot verify their accuracy or completeness.</p>
           </section>
 
           <section>
             <h2 className="text-lg font-black text-aw-slate mb-3">6. Limitation of Liability</h2>
-            <p className="mb-3">
-              EcoLink reports are estimates produced by automated AI classification. While we use
-              the official Australian Government NGA Factors and follow AASB S2 structure, we do
-              not warrant that reports generated are sufficient for all regulatory, contractual, or
-              audit purposes.
-            </p>
-            <p className="mb-3">
-              To the maximum extent permitted by Australian law, EcoLink&apos;s total liability for
-              any claim is limited to the subscription fees paid in the 3 months preceding the claim.
-            </p>
-            <p>
-              EcoLink is not liable for: loss of contracts, revenue, regulatory fines, audit
-              failures, or any other indirect or consequential losses resulting from reliance on
-              platform-generated reports.
-            </p>
+            <p>To the maximum extent permitted by Australian Consumer Law, EcoLink&apos;s total liability is limited to subscription fees paid in the 3 months preceding a claim. EcoLink is not liable for indirect, consequential, or regulatory penalties arising from Platform outputs.</p>
           </section>
 
           <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">7. Acceptable Use</h2>
-            <p className="mb-3">You agree not to:</p>
-            <ul className="list-disc pl-5 space-y-1 text-sm">
-              <li>Use the platform for any unlawful purpose</li>
-              <li>Input false or misleading data to generate inaccurate emissions reports</li>
-              <li>Attempt to reverse-engineer the NGA factor database or classification models</li>
-              <li>Resell or sublicence platform access without written consent</li>
-              <li>Interfere with the security or integrity of the platform</li>
-              <li>Exceed API rate limits or attempt to scrape data at scale</li>
-            </ul>
+            <h2 className="text-lg font-black text-aw-slate mb-3">7. Privacy &amp; Data</h2>
+            <p>Your use of the Platform is governed by our{" "}
+              <Link href="/legal/privacy" className="text-aw-green font-bold hover:underline">Privacy Policy</Link>,
+              including the Zero-AI Training guarantee. Your Xero data is never used to train AI models — enforced architecturally.</p>
           </section>
 
           <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">8. API Fair Use</h2>
-            <p>
-              Enterprise plan API access is subject to fair use limits. Automated requests must
-              include a valid API key and respect rate limits specified in the API documentation.
-              Abusive usage patterns may result in temporary suspension of API access.
-            </p>
+            <h2 className="text-lg font-black text-aw-slate mb-3">8. Governing Law</h2>
+            <p>These Terms are governed by the laws of <strong>New South Wales, Australia</strong>. Disputes are subject to NSW courts.</p>
           </section>
 
           <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">9. Intellectual Property</h2>
-            <p>
-              All software, classification models, UI design, and content on the EcoLink platform
-              are the intellectual property of EcoLink Australia Pty Ltd. These Terms do not
-              transfer any intellectual property rights to you.
+            <h2 className="text-lg font-black text-aw-slate mb-3">9. Contact</h2>
+            <p>EcoLink Australia Pty Ltd ·{" "}
+              <a href="mailto:legal@ecolink.com.au" className="text-aw-green font-bold hover:underline">legal@ecolink.com.au</a>
             </p>
           </section>
-
-          <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">10. Termination</h2>
-            <p>
-              Either party may terminate the agreement at any time. Upon termination, access ceases
-              at the end of the current billing period. You may request a data export within 30 days
-              of termination. After 30 days, data is deleted in accordance with our Privacy Policy.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">11. Governing Law</h2>
-            <p>
-              These Terms are governed by the laws of New South Wales, Australia. Any disputes are
-              subject to the exclusive jurisdiction of the courts of New South Wales.
-            </p>
-          </section>
-
-          <section>
-            <h2 className="text-lg font-black text-aw-slate mb-3">12. Contact</h2>
-            <p>
-              Legal enquiries:{" "}
-              <a href="mailto:legal@ecolink.com.au" className="text-aw-green hover:underline font-semibold">
-                legal@ecolink.com.au
-              </a>
-            </p>
-          </section>
-
         </div>
 
-        <div className="mt-12 pt-8 border-t border-aw-gray-border">
-          <Link href="/legal/privacy" className="text-sm font-bold text-aw-green hover:underline">
-            ← Privacy Policy
-          </Link>
+        <div className="mt-12 pt-6 border-t border-aw-gray-border flex items-center justify-between text-xs text-aw-slate-mid">
+          <span>© 2026 EcoLink Australia Pty Ltd</span>
+          <Link href="/legal/privacy" className="font-bold text-aw-green hover:underline">← Privacy Policy</Link>
         </div>
-
-      </div>
+      </main>
     </div>
   );
 }

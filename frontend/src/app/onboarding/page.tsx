@@ -4,24 +4,27 @@
  * /onboarding
  *
  * 4-step guided onboarding for new EcoLink customers.
- * Steps:
- *   1. Account  — email, password, full name
- *   2. Business — company name, ABN, state, industry
- *   3. Connect  — Xero OAuth (optional, skippable)
- *   4. Done     — confirmation + link to dashboard
  *
- * Registration happens at the end of Step 2 (before Xero connect).
- * After registration the user is auto-signed-in via NextAuth signIn().
+ * Step 0 — Account   : name, email, password
+ * Step 1 — Business  : company name, ABN, state, industry
+ * Step 2 — Connect   : Xero OAuth (skippable — can connect later in dashboard)
+ * Step 3 — Done      : summary + link to dashboard
+ *
+ * Registration occurs at end of Step 1. After that the user has a session
+ * and the "Connect Xero" step is active.
+ *
+ * Xero callback returns to /onboarding?step=2&xero=connected so the page
+ * can advance automatically to Step 3.
  */
 
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Leaf, ArrowRight, ArrowLeft, Eye, EyeOff,
-  Loader2, Building2, User,
+  Leaf, ArrowRight, ArrowLeft, Eye, EyeOff, Loader2,
+  Building2, User, Link2, CheckCircle2, Zap, FileBarChart2,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useCallback, useEffect, Suspense } from "react";
 import { isValidAbn } from "@/lib/validators";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -49,25 +52,22 @@ const INDUSTRIES = [
   { value: "S", label: "Other Services" },
 ];
 
-// Pós-registro o usuário é redirecionado p/ /login para verificar email,
-// e o WelcomeGuide modal cobre a parte de "Connect Xero" no dashboard.
-const STEP_LABELS = ["Account", "Business"];
+const STEP_LABELS = ["Account", "Business", "Connect Xero", "Ready"];
+const TOTAL_STEPS = 4;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface FormData {
-  // Step 1
   email:        string;
   password:     string;
   name:         string;
-  // Step 2
   company_name: string;
   abn:          string;
   state:        string;
   industry:     string;
 }
 
-// ─── Step indicator ───────────────────────────────────────────────────────────
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function StepDots({ current, total }: { current: number; total: number }) {
   return (
@@ -76,22 +76,20 @@ function StepDots({ current, total }: { current: number; total: number }) {
         <div key={i} className="flex items-center gap-2">
           <motion.div
             animate={{
-              width:  i <= current ? 28 : 8,
-              backgroundColor: i < current ? "#22c55e" : i === current ? "#1a2e44" : "#e5e7eb",
+              width:           i <= current ? 28 : 8,
+              backgroundColor: i < current ? "#16a34a" : i === current ? "#1a2e44" : "#e5e7eb",
             }}
             className="h-2 rounded-full"
           />
-          {i < total - 1 && <div className="h-px w-3 bg-aw-gray-border" />}
+          {i < total - 1 && <div className="h-px w-3 bg-slate-200" />}
         </div>
       ))}
-      <span className="ml-2 text-xs font-semibold text-aw-slate-mid">
-        {STEP_LABELS[current]}
+      <span className="ml-2 text-xs font-semibold text-slate-500">
+        Step {current + 1} of {total} — {STEP_LABELS[current]}
       </span>
     </div>
   );
 }
-
-// ─── Field ────────────────────────────────────────────────────────────────────
 
 function Field({
   label, hint, error, children,
@@ -113,20 +111,22 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement> & { error?: bo
       {...rest}
       className={`w-full rounded-xl border ${
         error ? "border-red-400 bg-red-50" : "border-aw-gray-border bg-white"
-      } px-4 py-3 text-sm text-aw-slate placeholder-aw-slate-mid/60 outline-none transition
+      } px-4 py-3 text-sm text-aw-slate placeholder-slate-400 outline-none transition
         focus:border-aw-green focus:ring-2 focus:ring-aw-green/20 ${className}`}
     />
   );
 }
 
-// ─── Main page ────────────────────────────────────────────────────────────────
+// ─── Inner page (needs useSearchParams) ──────────────────────────────────────
 
-export default function OnboardingPage() {
-  const router = useRouter();
+function OnboardingInner() {
+  const router       = useRouter();
+  const searchParams = useSearchParams();
 
   const [step,    setStep]    = useState(0);
   const [loading, setLoading] = useState(false);
   const [showPw,  setShowPw]  = useState(false);
+  const [xeroOrg, setXeroOrg] = useState<string | null>(null);
   const [errors,  setErrors]  = useState<Partial<Record<keyof FormData | "global", string>>>({});
 
   const [form, setForm] = useState<FormData>({
@@ -139,8 +139,22 @@ export default function OnboardingPage() {
     setErrors((prev) => ({ ...prev, [field]: undefined }));
   }, []);
 
-  // ── Step 1 validation ──────────────────────────────────────────────────
-  function validateStep1(): boolean {
+  // Detect return from Xero OAuth
+  useEffect(() => {
+    const xeroParam = searchParams.get("xero");
+    const stepParam = searchParams.get("step");
+    const orgParam  = searchParams.get("org");
+
+    if (xeroParam === "connected" && stepParam === "2") {
+      setXeroOrg(orgParam ?? "your Xero organisation");
+      setStep(3);
+      // Clean URL
+      window.history.replaceState({}, "", "/onboarding");
+    }
+  }, [searchParams]);
+
+  // ── Validation ─────────────────────────────────────────────────────────
+  function validateStep0(): boolean {
     const errs: typeof errors = {};
     if (!form.email.trim() || !form.email.includes("@"))
       errs.email = "Enter a valid email address";
@@ -153,15 +167,14 @@ export default function OnboardingPage() {
     else if (!/[0-9]/.test(form.password))
       errs.password = "Must contain a number";
     else if (!/[^A-Za-z0-9]/.test(form.password))
-      errs.password = "Must contain a special character (e.g. !@#$)";
+      errs.password = "Must contain a special character (!@#$…)";
     if (!form.name.trim())
       errs.name = "Enter your full name";
     setErrors(errs);
     return Object.keys(errs).length === 0;
   }
 
-  // ── Step 2 validation ──────────────────────────────────────────────────
-  function validateStep2(): boolean {
+  function validateStep1(): boolean {
     const errs: typeof errors = {};
     if (!form.company_name.trim())
       errs.company_name = "Enter your company name";
@@ -180,11 +193,10 @@ export default function OnboardingPage() {
     return Object.keys(errs).length === 0;
   }
 
-  // ── Register & sign-in after Step 2 ────────────────────────────────────
+  // ── Register (after Step 1) ─────────────────────────────────────────────
   const register = useCallback(async () => {
     setLoading(true);
     setErrors({});
-
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -196,46 +208,40 @@ export default function OnboardingPage() {
           company_name: form.company_name.trim(),
           abn:          form.abn.replace(/\s+/g, "") || undefined,
           industry:     form.industry || undefined,
-          state:        form.state || undefined,
+          state:        form.state    || undefined,
         }),
       });
-
       const data = await res.json();
-
       if (!res.ok) {
         if (data.error === "email_taken") {
           setErrors({ email: "This email is already registered. Try logging in." });
           setStep(0);
         } else if (data.field) {
           setErrors({ [data.field]: data.error.replace(/_/g, " ") });
+          if (["company_name","abn","state","industry"].includes(data.field)) setStep(1);
+          else setStep(0);
         } else {
           setErrors({ global: data.error || "Something went wrong. Please try again." });
         }
         return;
       }
-
-      // Registration successful — redirect to login with email-check notice
-      router.push("/login?check_email=1");
-
+      // Success — move to Xero connect step
+      setStep(2);
     } catch (e: unknown) {
-      const m = e instanceof Error ? e.message : "Network error";
-      setErrors({ global: `Could not reach server: ${m}` });
+      setErrors({ global: `Could not reach server: ${e instanceof Error ? e.message : "network error"}` });
     } finally {
       setLoading(false);
     }
-  }, [form, router]);
+  }, [form]);
 
   const handleNext = useCallback(async () => {
-    if (step === 0) {
-      if (validateStep1()) setStep(1);
-    } else if (step === 1) {
-      if (validateStep2()) await register();
-    }
+    if (step === 0 && validateStep0()) setStep(1);
+    else if (step === 1 && validateStep1()) await register();
   }, [step, register]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ─────────────────────────────────────────────────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gradient-to-br from-aw-gray/60 to-white flex flex-col items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white flex flex-col items-center justify-center px-4 py-12">
 
       {/* Logo */}
       <Link href="/" className="flex items-center gap-2.5 mb-10">
@@ -250,13 +256,13 @@ export default function OnboardingPage() {
       {/* Card */}
       <motion.div
         layout
-        className="w-full max-w-md rounded-3xl border border-aw-gray-border bg-white p-8 shadow-xl"
+        className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-xl"
       >
-        <StepDots current={step} total={2} />
+        <StepDots current={step} total={TOTAL_STEPS} />
 
         <AnimatePresence mode="wait">
 
-          {/* ── Step 0: Account ───────────────────────────────────────── */}
+          {/* ── Step 0: Account ──────────────────────────────────────────── */}
           {step === 0 && (
             <motion.div key="step0"
               initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}>
@@ -265,8 +271,8 @@ export default function OnboardingPage() {
                   <User size={22} className="text-aw-green" />
                 </div>
                 <h1 className="text-2xl font-black text-aw-slate">Create your account</h1>
-                <p className="text-sm text-aw-slate-mid mt-1 font-medium">
-                  Start your free 14-day trial. Cancel any time before it ends and you won&apos;t be charged.
+                <p className="text-sm text-slate-500 mt-1 font-medium">
+                  Start your 14-day free trial. Cancel before it ends — no charge.
                 </p>
               </div>
 
@@ -276,20 +282,20 @@ export default function OnboardingPage() {
                     onChange={(e) => set("name", e.target.value)}
                     error={!!errors.name} autoFocus />
                 </Field>
-
                 <Field label="Work email" error={errors.email}>
                   <Input type="email" placeholder="alex@acmebuild.com.au"
                     value={form.email} onChange={(e) => set("email", e.target.value)}
                     error={!!errors.email} />
                 </Field>
-
-                <Field label="Password" hint="Min 10 chars · uppercase · lowercase · number · symbol" error={errors.password}>
+                <Field label="Password"
+                  hint="Min 10 chars · upper · lower · number · symbol"
+                  error={errors.password}>
                   <div className="relative">
                     <Input type={showPw ? "text" : "password"} placeholder="••••••••"
                       value={form.password} onChange={(e) => set("password", e.target.value)}
                       error={!!errors.password} className="pr-12" />
                     <button type="button" onClick={() => setShowPw((v) => !v)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-aw-slate-mid hover:text-aw-slate transition-colors">
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
                       {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                     </button>
                   </div>
@@ -305,14 +311,14 @@ export default function OnboardingPage() {
                 Continue <ArrowRight size={16} />
               </button>
 
-              <p className="mt-4 text-center text-xs text-aw-slate-mid">
+              <p className="mt-4 text-center text-xs text-slate-500">
                 Already have an account?{" "}
                 <Link href="/login" className="font-bold text-aw-green hover:underline">Sign in</Link>
               </p>
             </motion.div>
           )}
 
-          {/* ── Step 1: Business ─────────────────────────────────────── */}
+          {/* ── Step 1: Business ─────────────────────────────────────────── */}
           {step === 1 && (
             <motion.div key="step1"
               initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}>
@@ -321,8 +327,8 @@ export default function OnboardingPage() {
                   <Building2 size={22} className="text-blue-600" />
                 </div>
                 <h1 className="text-2xl font-black text-aw-slate">About your business</h1>
-                <p className="text-sm text-aw-slate-mid mt-1 font-medium">
-                  This helps us match you to the right sector benchmarks.
+                <p className="text-sm text-slate-500 mt-1 font-medium">
+                  We use this to match NGA emission factors to your industry and state.
                 </p>
               </div>
 
@@ -332,32 +338,24 @@ export default function OnboardingPage() {
                     value={form.company_name} onChange={(e) => set("company_name", e.target.value)}
                     error={!!errors.company_name} autoFocus />
                 </Field>
-
-                <Field label="ABN *" hint="11-digit Australian Business Number"
-                  error={errors.abn}>
+                <Field label="ABN" hint="11-digit Australian Business Number" error={errors.abn}>
                   <Input placeholder="51 824 753 556" value={form.abn}
                     onChange={(e) => set("abn", e.target.value.replace(/[^\d\s]/g, ""))}
                     error={!!errors.abn} maxLength={14} />
                 </Field>
-
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="State *" error={errors.state}>
+                  <Field label="State" error={errors.state}>
                     <select value={form.state} onChange={(e) => set("state", e.target.value)}
-                      className={`w-full rounded-xl border ${errors.state ? "border-red-400 bg-red-50" : "border-aw-gray-border bg-white"} px-4 py-3 text-sm text-aw-slate outline-none focus:border-aw-green focus:ring-2 focus:ring-aw-green/20 transition`}>
+                      className={`w-full rounded-xl border ${errors.state ? "border-red-400 bg-red-50" : "border-slate-200 bg-white"} px-4 py-3 text-sm text-aw-slate outline-none focus:border-aw-green focus:ring-2 focus:ring-aw-green/20 transition`}>
                       <option value="">Select…</option>
-                      {AU_STATES.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
+                      {AU_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </Field>
-
-                  <Field label="Industry *" error={errors.industry}>
+                  <Field label="Industry" error={errors.industry}>
                     <select value={form.industry} onChange={(e) => set("industry", e.target.value)}
-                      className={`w-full rounded-xl border ${errors.industry ? "border-red-400 bg-red-50" : "border-aw-gray-border bg-white"} px-4 py-3 text-sm text-aw-slate outline-none focus:border-aw-green focus:ring-2 focus:ring-aw-green/20 transition`}>
+                      className={`w-full rounded-xl border ${errors.industry ? "border-red-400 bg-red-50" : "border-slate-200 bg-white"} px-4 py-3 text-sm text-aw-slate outline-none focus:border-aw-green focus:ring-2 focus:ring-aw-green/20 transition`}>
                       <option value="">Select…</option>
-                      {INDUSTRIES.map((ind) => (
-                        <option key={ind.value} value={ind.value}>{ind.label}</option>
-                      ))}
+                      {INDUSTRIES.map((ind) => <option key={ind.value} value={ind.value}>{ind.label}</option>)}
                     </select>
                   </Field>
                 </div>
@@ -369,7 +367,7 @@ export default function OnboardingPage() {
 
               <div className="mt-6 flex gap-3">
                 <button onClick={() => setStep(0)}
-                  className="flex items-center gap-1.5 rounded-xl border border-aw-gray-border bg-white px-4 py-3 text-sm font-bold text-aw-slate transition hover:border-aw-slate/40 active:scale-95">
+                  className="flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-aw-slate transition hover:border-slate-400 active:scale-95">
                   <ArrowLeft size={15} />
                 </button>
                 <button onClick={handleNext} disabled={loading}
@@ -382,16 +380,122 @@ export default function OnboardingPage() {
             </motion.div>
           )}
 
+          {/* ── Step 2: Connect Xero ─────────────────────────────────────── */}
+          {step === 2 && (
+            <motion.div key="step2"
+              initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}>
+              <div className="mb-6">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#13B5EA]/10 mb-3">
+                  <Link2 size={22} className="text-[#13B5EA]" />
+                </div>
+                <h1 className="text-2xl font-black text-aw-slate">Connect Xero</h1>
+                <p className="text-sm text-slate-500 mt-1 font-medium">
+                  We read your transactions to calculate your carbon footprint. Read-only access — we never modify your data.
+                </p>
+              </div>
+
+              {/* What Xero connect enables */}
+              <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 mb-5 space-y-2">
+                {[
+                  { icon: Zap,            text: "Auto-import last 12 months of transactions" },
+                  { icon: FileBarChart2,  text: "AI classifies each line item to a GHG category" },
+                  { icon: CheckCircle2,   text: "Draft AASB S2 report ready in under 10 minutes" },
+                ].map(({ icon: Icon, text }) => (
+                  <div key={text} className="flex items-center gap-3 text-sm text-slate-600 font-medium">
+                    <Icon size={15} className="shrink-0 text-aw-green" />
+                    {text}
+                  </div>
+                ))}
+              </div>
+
+              <a
+                href="/api/integrations/xero?returnTo=/onboarding?step=2"
+                className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-[#13B5EA] py-3.5 text-sm font-bold text-white transition hover:bg-[#0ea5d8] active:scale-95"
+              >
+                <svg width="18" height="18" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+                  <path d="M20 0C9 0 0 9 0 20s9 20 20 20 20-9 20-20S31 0 20 0z" fill="white" fillOpacity=".15"/>
+                  <path d="M28.4 16.1c-.5 0-.9.4-.9.9s.4.9.9.9.9-.4.9-.9-.4-.9-.9-.9zm-8.8-4.5c-4.6 0-8.4 3.7-8.4 8.4s3.7 8.4 8.4 8.4 8.4-3.7 8.4-8.4-3.8-8.4-8.4-8.4zm0 13.9c-3.1 0-5.6-2.5-5.6-5.6s2.5-5.6 5.6-5.6 5.6 2.5 5.6 5.6-2.5 5.6-5.6 5.6z" fill="white"/>
+                </svg>
+                Connect with Xero
+              </a>
+
+              <button
+                onClick={() => setStep(3)}
+                className="mt-3 w-full rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-500 transition hover:border-slate-400 hover:text-slate-700 active:scale-95"
+              >
+                Skip for now — I&apos;ll connect later
+              </button>
+
+              <p className="mt-4 text-center text-xs text-slate-400">
+                You can connect Xero at any time from your dashboard settings.
+              </p>
+            </motion.div>
+          )}
+
+          {/* ── Step 3: Done ─────────────────────────────────────────────── */}
+          {step === 3 && (
+            <motion.div key="step3"
+              initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }}>
+              <div className="text-center mb-6">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-aw-green-light mx-auto mb-4">
+                  <CheckCircle2 size={30} className="text-aw-green" />
+                </div>
+                <h1 className="text-2xl font-black text-aw-slate">
+                  {xeroOrg ? "Xero connected!" : "Account created!"}
+                </h1>
+                <p className="text-sm text-slate-500 mt-2 font-medium">
+                  {xeroOrg
+                    ? `${xeroOrg} is connected. Your first report will be ready in minutes.`
+                    : "Check your email to verify your account, then go to your dashboard."}
+                </p>
+              </div>
+
+              {/* Next steps */}
+              <div className="rounded-2xl bg-slate-50 border border-slate-200 p-4 mb-5 space-y-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-400">What happens next</p>
+                {[
+                  xeroOrg ? "✅ Xero connected — transactions importing now" : "📧 Verify your email to activate your account",
+                  "🤖 AI classifies each transaction to Scope 1, 2 or 3",
+                  "📄 Review & approve — then generate your AASB S2 report PDF",
+                ].map((item) => (
+                  <p key={item} className="text-sm text-slate-600 font-medium">{item}</p>
+                ))}
+              </div>
+
+              <button
+                onClick={() => router.push("/dashboard")}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-aw-green py-3.5 text-sm font-bold text-white transition hover:bg-aw-green-dark active:scale-95"
+              >
+                Go to Dashboard <ArrowRight size={16} />
+              </button>
+
+              {!xeroOrg && (
+                <p className="mt-3 text-center text-xs text-slate-400">
+                  Didn&apos;t receive the email?{" "}
+                  <Link href="/login" className="font-bold text-aw-green hover:underline">Resend from login page</Link>
+                </p>
+              )}
+            </motion.div>
+          )}
+
         </AnimatePresence>
       </motion.div>
 
       {/* Footer */}
-      <p className="mt-6 text-xs text-aw-slate-mid text-center">
-        By signing up you agree to our{" "}
-        <span className="font-semibold text-aw-slate">Terms of Service</span> and{" "}
-        <span className="font-semibold text-aw-slate">Privacy Policy</span>.
+      <p className="mt-6 text-xs text-slate-400 text-center">
+        By signing up you agree to our Terms of Service and Privacy Policy.
         <br />Protected under the Australian Privacy Act 1988.
       </p>
     </div>
+  );
+}
+
+// ─── Wrapper with Suspense (required for useSearchParams) ─────────────────────
+
+export default function OnboardingPage() {
+  return (
+    <Suspense>
+      <OnboardingInner />
+    </Suspense>
   );
 }
